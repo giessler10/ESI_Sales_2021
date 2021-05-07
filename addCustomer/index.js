@@ -16,7 +16,6 @@ const con = {
   user: config.user,
   password: config.password,
   port: config.port,
-  database: config.database,
 };
 
 /////////////////////////////////////EXPORTS HANDLER///////////////////////////////////////

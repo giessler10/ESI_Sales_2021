@@ -24,37 +24,27 @@ exports.handler = async (event, context, callback) => {
   const pool = await mysql.createPool(con);
 
   // get event data
-  let C_NR=Math.floor(Math.random() * 1000);
-  //let C_CT_ID = ""+Math.floor(Math.random() * 100);
-  let C_CT_ID = "10";
-  let C_COMPANY = event.company;
-  let C_FIRSTNAME = event.firstName;
-  let C_LASTNAME = event.surName;
-  let C_CO_ID = "20";
-  let C_STREET = event.street;
-  let C_CI_PC = event.PostCode;
-  let C_HOUSENR = event.number;
-  let C_EMAIL = event.mail;
-  let C_TEL = event.phone;
-  
-  //let city = event.city;
-  //let country = event.country;
+  let C_NR=Math.floor(Math.random() * 1000);    //CustomerNr
+  let C_CT_ID = "1";  //Customer TypeID | 1=Privat | 2=Business
+  let C_FIRSTNAME = event.C_FIRSTNAME;
+  let C_LASTNAME = event.C_LASTNAME;
+  let C_STREET = event.C_STREET;
+  let C_HOUSENR = event.C_HOUSENR;
+  let C_CI_PC = event.C_CI_PC;  //Customer Post Code
+  let CI_DESC = event.CI_DESC;  //City Description
+  let C_CO_ID = "1"; //Country ID | 1=Deutschland
+  let CO_DESC = event.CO_DESC;  //Country
+  let C_TEL = event.C_TEL;
+  let C_EMAIL = event.C_EMAIL;
+  let C_COMPANY = event.C_COMPANY;  //Firma
   //let business = event.business;
-  
-  let idPERSON = Math.floor(Math.random() * 1000);
-  let Name = event.firstName;
-  
-  
-  //await callinsertDB(pool, insertOrdinaryCustomer(C_NR , C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL));
-  
-  //Test Person
-  await callinsertDB(pool, insertPerson(idPERSON, Name));
-  
+
+  await callinsertDB(pool, insertOrdinaryCustomer(C_NR , C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL));
+
   message = 'Die/Der Kund/inn/e ' + C_FIRSTNAME + ' ' + C_LASTNAME + ' hat die Kundennummer: ' + C_NR + '.';
 
   const response = {
     statusCode: 200,
-    //body: JSON.stringify('Hello from Lambda!'),
     boby: JSON.stringify(message),
   };
   return response;
@@ -70,12 +60,4 @@ const insertOrdinaryCustomer = function (C_NR , C_CT_ID, C_COMPANY, C_FIRSTNAME,
 async function callinsertDB(client, queryMessage) {
   await client.query(queryMessage)
     .catch(console.log);
-}
-
-
-//Test Person
-const insertPerson = function (idPERSON, Name) {
-  var queryMessage = "INSERT INTO `CUSTOMER`.`PERSON` (`idPERSON`, `Name`) VALUES ('"+idPERSON+"', '"+Name+"');";
-  console.log(queryMessage);
-  return (queryMessage);
 };

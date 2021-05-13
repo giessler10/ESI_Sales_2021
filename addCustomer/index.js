@@ -24,19 +24,18 @@ exports.handler = async (event, context, callback) => {
   const pool = await mysql.createPool(con);
 
   // get event data
-  let C_CT_ID = "B2C";  //Customer TypeID | B2B=Privat | B2C=Business
+  let C_CT_ID = event.C_CT_ID;  //Customer TypeID | B2B=Privat | B2C=Business
+  let C_COMPANY = event.C_COMPANY;  //Firma
   let C_FIRSTNAME = event.C_FIRSTNAME;
   let C_LASTNAME = event.C_LASTNAME;
   let C_STREET = event.C_STREET;
   let C_HOUSENR = event.C_HOUSENR;
   let C_CI_PC = event.C_CI_PC;  //Customer Post Code
   let CI_DESC = event.CI_DESC;  //City Description
-  let C_CO_ID = event.C_CO_ID; //Country ID | DE=Deutschland
-  let CO_DESC = event.CO_DESC;  //Country
+  let C_CO_ID = event.CO_ID;    //Country ID | DE=Deutschland
   let C_TEL = event.C_TEL;
   let C_EMAIL = event.C_EMAIL;
-  let C_COMPANY = event.C_COMPANY;  //Firma
-  //let business = event.business;
+
 
   try{
         await callDBResonse(pool, checkCityExist(C_CO_ID, C_CI_PC));

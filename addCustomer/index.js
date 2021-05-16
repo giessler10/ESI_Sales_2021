@@ -8,6 +8,7 @@ var config = require('./config');
 
 var res;
 var message;
+var response;
 
 //******* DATABASE CONNECTION *******
 
@@ -52,24 +53,31 @@ exports.handler = async (event, context, callback) => {
         await callDBResonse(pool, getNewCustomerID());
         message = 'Die/Der Kund/inn/e ' + C_FIRSTNAME + ' ' + C_LASTNAME + ' hat die Kundennummer: '+ res.newcustomerID +'.';
 
-        const response = {
-            statusCode: 200,
-            //boby: JSON.stringify(message),
-            message: message
+        var messageJSON = {
+        	message: message
         };
+        
+        response = {
+        	statusCode: 200,
+        	message: JSON.stringify(messageJSON)
+        }; 
         return response;
 
     }
     catch (error) {
-        console.log(error);
-        return {
-            statusCode: 400,
-            message: "Fehler beim Anlegen des Kunden.",
-            "Error": "Fehler beim Anlegen des Kunden."
-        };
+      console.log(error);
+      
+      response = {
+        statusCode: 500,
+        errorMessage: "Internal Server Error",
+        errorType: "Internal Server Error"
+      };
+  	
+      //Fehler schmeisen
+      context.fail(JSON.stringify(response));
     }
     finally {
-        await pool.end()
+        await pool.end();
     }
 };
 
@@ -78,7 +86,7 @@ exports.handler = async (event, context, callback) => {
 async function callDB(client, queryMessage) {
     await client.query(queryMessage)
       .catch(console.log);
-};
+}
 
 async function callDBResonse(client, queryMessage) {
   var queryResult = 0;
@@ -100,7 +108,7 @@ async function callDBResonse(client, queryMessage) {
           return results;
         }
       })
-    .catch(console.log);
+    .catch();
 }
 
 
@@ -122,11 +130,10 @@ const getNewCustomerID = function () {
     var queryMessage = "SELECT max(C_NR) as newcustomerID FROM CUSTOMER.CUSTOMER;";
     console.log(queryMessage);
     return (queryMessage);
-  };
+};
 
 const checkCityExist= function (C_CO_ID, C_CI_PC) {
     var queryMessage = "SELECT * FROM CUSTOMER.CITY WHERE CI_CO_ID = '"+ C_CO_ID + "' AND CI_PC = '" + C_CI_PC + "';";
     console.log(queryMessage);
     return (queryMessage);
-  };
-  
+};

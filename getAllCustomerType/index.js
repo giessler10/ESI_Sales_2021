@@ -8,6 +8,7 @@ var config = require('./config');
 
 var res;
 var results = [];
+var response;
 
 //******* DATABASE CONNECTION *******
 
@@ -39,10 +40,15 @@ exports.handler = async (event, context, callback) => {
     }
     catch (error) {
       console.log(error);
-      return {
-        statusCode: 400,
-        "Error": "Function catched an error"
+      
+      response = {
+        statusCode: 500,
+        errorMessage: "Internal Server Error",
+        errorType: "Internal Server Error"
       };
+  	
+      //Fehler schmeisen
+      context.fail(JSON.stringify(response));
     }
     finally {
       await pool.end();
@@ -54,7 +60,7 @@ exports.handler = async (event, context, callback) => {
 async function callDB(client, queryMessage) {
     await client.query(queryMessage)
       .catch(console.log);
-};
+}
 
 async function callDBResonse(client, queryMessage) {
   var queryResult = 0;
@@ -76,13 +82,13 @@ async function callDBResonse(client, queryMessage) {
           return results;
         }
       })
-    .catch(console.log);
+    .catch();
 }
 
 //******* SQL Statements *******
 
 const getAllCustomers = function () {
-    var queryMessage = "SELECT * FROM CUSTOMER.CUSTOMERTYPE ORDER BY CT_DESC DESC;"
+    var queryMessage = "SELECT * FROM CUSTOMER.CUSTOMERTYPE ORDER BY CT_DESC DESC;";
     //console.log(queryMessage)
     return (queryMessage);
 };

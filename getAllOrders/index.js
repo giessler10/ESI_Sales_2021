@@ -7,6 +7,7 @@ var config = require('./config');
 //******* GLOBALS *******
 
 var res;
+var response;
 var results = [];
 
 //******* DATABASE CONNECTION *******
@@ -24,10 +25,10 @@ exports.handler = async (event, context, callback) => {
     const pool = await mysql.createPool(con);
   
     try {
-      //get all Customers
+      //get all Orders
       await callDBResonse(pool, getAllOrders());
       results = res;
-      //console.log(results);
+      console.log(results);
   
       const response = {
         statusCode: 200,
@@ -39,10 +40,15 @@ exports.handler = async (event, context, callback) => {
     }
     catch (error) {
       console.log(error);
-      return {
-        statusCode: 400,
-        "Error": "Function catched an error"
+      
+      response = {
+        statusCode: 500,
+        errorMessage: "Internal Server Error",
+        errorType: "Internal Server Error"
       };
+    
+      //Fehler schmeisen
+      context.fail(JSON.stringify(response));
     }
     finally {
       await pool.end();
@@ -54,7 +60,7 @@ exports.handler = async (event, context, callback) => {
 async function callDB(client, queryMessage) {
     await client.query(queryMessage)
       .catch(console.log);
-};
+}
 
 async function callDBResonse(client, queryMessage) {
   var queryResult = 0;
@@ -82,7 +88,7 @@ async function callDBResonse(client, queryMessage) {
 //******* SQL Statements *******
 
 const getAllOrders = function () {
-    var queryMessage = "SELECT * FROM ORDERS.ORDER;";
+    var queryMessage = "SELECT * FROM VIEWS.ORDERINFO;";
     //console.log(queryMessage)
     return (queryMessage);
 };

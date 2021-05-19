@@ -85,7 +85,7 @@ async function callDBResonse(client, queryMessage) {
 //******* SQL Statements *******
 
 const getOrderInfo = function (O_NR) {
-    var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
+    var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + " ORDER BY O_NR;";
     //console.log(queryMessage)
     return (queryMessage);
 };

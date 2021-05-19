@@ -88,7 +88,7 @@ async function callDBResonse(client, queryMessage) {
 //******* SQL Statements *******
 
 const getAllCustomers = function () {
-    var queryMessage = "SELECT * FROM CUSTOMER.CUSTOMER;";
+    var queryMessage = "SELECT * FROM VIEWS.CUSTOMERINFO ORDER BY C_COMPANY, C_LASTNAME, C_FIRSTNAME ASC;";
     //console.log(queryMessage)
     return (queryMessage);
 };

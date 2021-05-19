@@ -93,7 +93,7 @@ async function callDBResonse(client, queryMessage) {
 //******* SQL Statements *******
 
 const getCustomer = function (C_NR) {
-    var queryMessage = "SELECT * FROM CUSTOMER.CUSTOMER WHERE C_NR='" + C_NR + "';";
+    var queryMessage = "SELECT * FROM VIEWS.CUSTOMERINFO WHERE C_NR='" + C_NR + "' ORDER BY C_COMPANY, C_LASTNAME, C_FIRSTNAME ASC;";
     //console.log(queryMessage)
     return (queryMessage);
 };

@@ -91,7 +91,7 @@ async function callDBResonse(client, queryMessage) {
 //******* SQL Statements *******
 
 const getOrderitems = function (O_NR) {
-    var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR = " + O_NR + ";";
+    var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR = " + O_NR + " ORDER BY OI_O_NR, OI_NR;";
     //console.log(queryMessage)
     return (queryMessage);
 };

@@ -25,33 +25,23 @@ exports.handler = async (event, context, callback) => {
   const pool = await mysql.createPool(con);
 
   // get event data
-  let C_CT_ID = event.C_CT_ID;  //Customer TypeID | B2B=Privat | B2C=Business
-  let C_COMPANY = event.C_COMPANY;  //Firma
-  let C_FIRSTNAME = event.C_FIRSTNAME;
-  let C_LASTNAME = event.C_LASTNAME;
-  let C_STREET = event.C_STREET;
-  let C_HOUSENR = event.C_HOUSENR;
-  let C_CI_PC = event.C_CI_PC;  //Customer Post Code
-  let CI_DESC = event.CI_DESC;  //City Description
-  let C_CO_ID = event.CO_ID;    //Country ID | DE=Deutschland
-  let C_TEL = event.C_TEL;
-  let C_EMAIL = event.C_EMAIL;
+  //let O_NR = event.O_NR;  -> Not needed, because MySQL will automatically set the Number
+  let O_C_NR = event.O_C_NR;  //Firma
+  let O_OT_NR = event.O_OT_NR;
+  //let O_OST_NR = event.O_OST_NR; -> Always set fixed value of 1 (Open) for Orderstate
+  //let O_TIMESTAMP = event.O_TIMESTAMP; -> Not needed, because MySQL will automatically set the Timestamp when Data was Inserted
+
 
 
   try{
-        await callDBResonse(pool, checkCityExist(C_CO_ID, C_CI_PC));
-        if(res == null){
-          //Neue City anlegen
-          //console.log("Neuer Eintrag in City erstellt.")
-          await callDB(pool, insertNewCity(C_CO_ID, C_CI_PC, CI_DESC));
-        }
+
         
         //Neuen Kunden anlegen
-        await callDB(pool, insertNewCustomer(C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL));
+        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR));
         
         //Abfrage neue Kundennummer
-        await callDBResonse(pool, getNewCustomerID());
-        message = 'Die/Der Kund/inn/e ' + C_FIRSTNAME + ' ' + C_LASTNAME + ' hat die Kundennummer: '+ res.newcustomerID +'.';
+        await callDBResonse(pool, getNewOrderID());
+        message = 'Der neue Auftrag hat die Nummer ' + res.newOrderID +'.';
 
         var messageJSON = {
         	message: message
@@ -114,26 +104,14 @@ async function callDBResonse(client, queryMessage) {
 
 //******* SQL Statements *******
 
-const insertNewCustomer = function (C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL) {
-  var queryMessage = "INSERT INTO `CUSTOMER`.`CUSTOMER` (C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL) VALUES ('" + C_CT_ID + "', '" + C_COMPANY + "', '" + C_FIRSTNAME + "', '" + C_LASTNAME + "', '" + C_CO_ID + "', '" + C_CI_PC + "', '" + C_STREET + "', '" + C_HOUSENR + "', '" + C_EMAIL + "', '" + C_TEL + "');";
+const insertNewOrder = function (O_C_NR, O_OT_NR) {
+  var queryMessage = "INSERT INTO `ORDER`.`ORDER` (O_C_NR, O_OT_NR, O_OST_NR) VALUES ('" + O_C_NR + "', '" + O_OT_NR + "', 1);";
   console.log(queryMessage);
   return (queryMessage);
 };
 
-const insertNewCity = function (C_CO_ID, C_CI_PC, CI_DESC) {
-  var queryMessage = "INSERT INTO `CUSTOMER`.`CITY` (`CI_CO_ID`, `CI_PC`, `CI_DESC`) VALUES ('" + C_CO_ID + "', '" + C_CI_PC + "', '" + CI_DESC +"');";
-  console.log(queryMessage);
-  return (queryMessage);
-};
-
-const getNewCustomerID = function () {
-    var queryMessage = "SELECT max(C_NR) as newcustomerID FROM CUSTOMER.CUSTOMER;";
-    console.log(queryMessage);
-    return (queryMessage);
-};
-
-const checkCityExist= function (C_CO_ID, C_CI_PC) {
-    var queryMessage = "SELECT * FROM CUSTOMER.CITY WHERE CI_CO_ID = '"+ C_CO_ID + "' AND CI_PC = '" + C_CI_PC + "';";
+const getNewOrderID = function () {
+    var queryMessage = "SELECT max(O_NR) as neworderID FROM VIEWS.ORDERINFO;";
     console.log(queryMessage);
     return (queryMessage);
 };

@@ -9,6 +9,10 @@ var config = require('./config');
 var res;
 var response;
 var results = [];
+var message;
+
+var C_NR = "";
+var O_OST_NR = "";
 
 //******* DATABASE CONNECTION *******
 
@@ -23,20 +27,95 @@ const con = {
 
 exports.handler = async (event, context, callback) => {
     const pool = await mysql.createPool(con);
+    
+    C_NR = event.C_NR;
+    O_OST_NR = event.O_OST_NR.split(',');
   
     try {
-      //get all Orders
-      await callDBResonse(pool, getAllOrders());
-      results = res;
-      console.log(results);
+      if(C_NR == "" && O_OST_NR[0] == ""){
+        //get all Orders
+        await callDBResonse(pool, getAllOrders());
+        results = res;
+        //console.log(results);
+    
+        const response = {
+          statusCode: 200,
+          body: results
+        };
   
-      const response = {
-        statusCode: 200,
-        body: results
-      };
+        console.log(response);
+        return response;
+      }
+      else if(C_NR != "" && O_OST_NR[0] == ""){
+        //get all Orders with Customer
+        await callDBResonse(pool, getAllOrdersCustomerId(C_NR));
+        results = res;
+        //console.log(results);
+    
+        const response = {
+          statusCode: 200,
+          body: results
+        };
   
-      console.log(response);
-      return response;
+        console.log(response);
+        return response;
+      }
+      else if(C_NR == "" && O_OST_NR[0] != ""){
+        if(checkArrayItems(O_OST_NR)){
+          //get all Orders with status
+          await callDBResonse(pool, getAllOrdersStatus(O_OST_NR));
+          results = res;
+          //console.log(results);
+      
+          const response = {
+            statusCode: 200,
+            body: results
+          };
+    
+          console.log(response);
+          return response;
+        }
+        else{
+          message = 'Der Queryparameter status hat einen unerlaubten Wert.';
+          
+          response = {
+            statusCode: 400,
+            errorMessage: message,
+            errorType: "Bad Request"
+          };
+          
+          //Fehler schmeisen
+          context.fail(JSON.stringify(response));
+        }
+      }
+      else{
+        if(checkArrayItems(O_OST_NR)){
+          //get all Orders with status and CustomerId
+          await callDBResonse(pool, getAllOrdersStatusCustomerId(O_OST_NR, C_NR));
+          results = res;
+          //console.log(results);
+      
+          const response = {
+            statusCode: 200,
+            body: results
+          };
+    
+          console.log(response);
+          return response;
+        }
+        else{
+        message = 'Der Queryparameter status hat einen unerlaubten Wert.';
+        
+        response = {
+          statusCode: 400,
+          errorMessage: message,
+          errorType: "Bad Request"
+        };
+        
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+        }
+      }
     }
     catch (error) {
       console.log(error);
@@ -59,7 +138,7 @@ exports.handler = async (event, context, callback) => {
 
 async function callDB(client, queryMessage) {
     await client.query(queryMessage)
-      .catch(console.log);
+      .catch();
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -82,13 +161,74 @@ async function callDBResonse(client, queryMessage) {
           return results;
         }
       })
-    .catch(console.log);
+    .catch();
 }
+
+//************* Hilfsfunktionen *****************************
+
+const checkArrayItems = function (arrayStatus) {
+  if (Array.isArray(arrayStatus)) {
+   var statusAreNumber = true;
+   arrayStatus.forEach(function(item){
+     var itemState = parseInt(item,10);
+      if(isNaN(itemState)){
+         statusAreNumber = false;
+      }
+   });
+   //console.log(statusAreNumber);
+   return statusAreNumber;
+  }
+};
+
+const buildSQLWhereStringStatus = function(O_OST_NR) {
+  var where = "";
+  if(O_OST_NR.length == 1){
+    where = "WHERE O_OST_NR=" + O_OST_NR[0];
+    return where;
+  }
+  else{
+    where = "WHERE O_OST_NR IN (" + O_OST_NR.join(', ') + ")";
+    return  where;
+  }
+};
+
+const buildSQLWhereStringStatusCustomerId = function(O_OST_NR, C_NR) {
+  var where = "";
+  if(O_OST_NR.length == 1){
+    where = "WHERE O_OST_NR=" + O_OST_NR[0] + " AND C_NR=" + C_NR;
+    return where;
+  }
+  else{
+    where = "WHERE O_OST_NR IN (" + O_OST_NR.join(', ') + ")" + " AND C_NR=" + C_NR;
+    return  where;
+  }
+};
+
 
 //******* SQL Statements *******
 
 const getAllOrders = function () {
     var queryMessage = "SELECT * FROM VIEWS.ORDERINFO ORDER BY O_NR;";
     //console.log(queryMessage)
+    return (queryMessage);
+};
+
+const getAllOrdersCustomerId = function (C_NR) {
+    var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE C_NR=" + C_NR + " ORDER BY O_NR;";
+    //console.log(queryMessage);
+    return (queryMessage);
+};
+
+const getAllOrdersStatus = function (O_OST_NR) {
+    var where = buildSQLWhereStringStatus(O_OST_NR);  //WHERE Statement
+    var queryMessage = "SELECT * FROM VIEWS.ORDERINFO " + where + " ORDER BY O_NR;";
+    //console.log(queryMessage);
+    return (queryMessage);
+};
+
+const getAllOrdersStatusCustomerId = function (O_OST_NR, C_NR) {
+    var where = buildSQLWhereStringStatusCustomerId(O_OST_NR, C_NR);  //WHERE Statement
+    var queryMessage = "SELECT * FROM VIEWS.ORDERINFO " + where + " ORDER BY O_NR;";
+    //console.log(queryMessage);
     return (queryMessage);
 };

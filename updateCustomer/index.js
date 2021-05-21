@@ -26,17 +26,17 @@ exports.handler = async (event, context, callback) => {
 
   // get event data
   let C_NR = event.C_NR; //Kundennummer
-  let C_CT_ID = event.C_CT_ID;  //Customer TypeID | B2B=Privat | B2C=Business
-  let C_COMPANY = event.C_COMPANY;  //Firma
-  let C_FIRSTNAME = event.C_FIRSTNAME;
-  let C_LASTNAME = event.C_LASTNAME;
-  let C_STREET = event.C_STREET;
-  let C_HOUSENR = event.C_HOUSENR;
-  let C_CI_PC = event.C_CI_PC;  //Customer Post Code
-  let CI_DESC = event.CI_DESC;  //City Description
-  let C_CO_ID = event.CO_ID;    //Country ID | DE=Deutschland
-  let C_TEL = event.C_TEL;
-  let C_EMAIL = event.C_EMAIL;
+  let C_CT_ID = event.body.C_CT_ID;  //Customer TypeID | B2B=Privat | B2C=Business
+  let C_COMPANY = event.body.C_COMPANY;  //Firma
+  let C_FIRSTNAME = event.body.C_FIRSTNAME;
+  let C_LASTNAME = event.body.C_LASTNAME;
+  let C_STREET = event.body.C_STREET;
+  let C_HOUSENR = event.body.C_HOUSENR;
+  let C_CI_PC = event.body.C_CI_PC;  //Customer Post Code
+  let CI_DESC = event.body.CI_DESC;  //City Description
+  let C_CO_ID = event.body.CO_ID;    //Country ID | DE=Deutschland
+  let C_TEL = event.body.C_TEL;
+  let C_EMAIL = event.body.C_EMAIL;
 
 
   try{

@@ -1,0 +1,18 @@
+{
+  "name": "updateOrdersOrderitemStatus",
+  "version": "1.0.0",
+  "description": "Update state of  many orderitems",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "moment": "^2.29.1",
+    "moment-timezone": "^0.5.33",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.2.5"
+  }
+}

@@ -31,7 +31,7 @@ exports.handler = async (event, context, callback) => {
 
 
   try{
-    //Prüfen ob der User existiert
+    //Prüfen ob die Bestellung existiert
     await callDBResonse(pool, checkOrderExist(O_NR,OI_NR));
     if(res == null){
       message = 'Die Position '+ OI_NR +' der Bestellung ' + O_NR + ' wurde nicht gefunden.';

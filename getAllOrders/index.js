@@ -28,8 +28,13 @@ const con = {
 exports.handler = async (event, context, callback) => {
     const pool = await mysql.createPool(con);
     
-    C_NR = event.C_NR;
-    O_OST_NR = event.O_OST_NR.split(',');
+    if (event.C_NR !== undefined){
+      C_NR = event.C_NR;
+    }
+    
+    if (event.O_OST_NR !== undefined){
+      O_OST_NR = event.O_OST_NR.toString().split(',');
+    }
   
     try {
       if(C_NR == "" && O_OST_NR[0] == ""){

@@ -10,11 +10,9 @@ const axios = require('axios');
 var res;
 var message;
 var response;
+var messageJSON;
+
 var body_production;
-var OI_O_NR; //Bestellnummer
-var C_CT_ID; //Kundentyp
-var O_TIMESTAMP; //Zeit
-var PO_CODE;
 
 //******* DATABASE CONNECTION *******
 
@@ -31,20 +29,15 @@ exports.handler = async (event, context, callback) => {
   const pool = await mysql.createPool(con);
 
   // get event data
-  let O_C_NR = event.C_NR;        //Kundennummer
-  let O_OT_NR = event.O_OT_NR;    //Bestelltyp 1=internal | 2=external
-  let draft = event.draft;
-  let orderitems = event.orderitems;
-  //let O_OST_NR = event.O_OST_NR; -> Always set fixed value of 1 (Open) for Orderstate
-  //let O_TIMESTAMP = event.O_TIMESTAMP; -> Not needed, because MySQL will automatically set the Timestamp when Data was Inserted
-
+  let O_NR = event.O_NR;          //OrderNr
+  let OST_NR = event.OST_NR;  //OrderState
 
 
   try{
-    //Prüfen ob der User existiert
-    await callDBResonse(pool, checkUserExist(O_C_NR));
+    //Prüfen ob die Bestellung existiert
+    await callDBResonse(pool, checkOrderExist(O_NR));
     if(res == null){
-      message = 'Der Kunde mit der Kundennummer '+ O_C_NR +' wurde nicht gefunden.';
+      message = 'Die Bestellung ' + O_NR + ' wurde nicht gefunden.';
       
       response = {
         statusCode: 404,
@@ -56,77 +49,65 @@ exports.handler = async (event, context, callback) => {
       context.fail(JSON.stringify(response));
     }
     else{
-      //Bestelltyp festlegen
-      if(O_OT_NR == 1){
-        PO_CODE="P";  //P=Preprocessing
+      //Prüfen ob der Status existiert
+      await callDBResonse(pool, checkStatusExist(OST_NR));
+      if(res == null){
+        message = 'Die Status-Nummer '+ OST_NR +' wurde nicht gefunden.';
+        
+        response = {
+          statusCode: 400,
+          errorMessage: message,
+          errorType: "Bad Request"
+        };
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
       }
       else{
-        PO_CODE="N";  //N=NEW
-      }
-      
-      //Bestellung als Enwurf anlegen
-      if(draft == true){
-        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR, 9));
+        //Order aktualisieren
+        await callDB(pool, updateOrderStatus(O_NR,OST_NR));
         
-        //Neue Bestellnummer abfragen
-        await callDBResonse(pool, getNewOrderID());
-        OI_O_NR = res[0].neworderID;
+        if(OST_NR == 1){
+          //Aufträge bei der Produktion anlegen ******************************************
         
-        //Orderitems anlegen
-        for (var i = 0; i < orderitems.length; i++) {
-          //Prüfen, ob Orderitems in MaWi existieren ...
-          await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+          //Order abrufen
+          await callDBResonse(pool, getOrder(O_NR));
+          var O_TIMESTAMP = res[0].O_TIMESTAMP;
+          var O_OT_NR = res[0].O_OT_NR;
+          var C_CT_ID = res[0].C_CT_ID;
           
-          //Bild anlegen
-        }
-      }
-      
-      //Bestellung direkt an Produktion weiterleiten
-      else{
-        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR, 1));
-        
-        //Neue Bestellnummer abfragen
-        await callDBResonse(pool, getNewOrderID());
-        OI_O_NR = res[0].neworderID;
-        
-        //Orderitems anlegen
-        for (var i = 0; i < orderitems.length; i++) {
-          //Prüfen, ob Orderitems in MaWi existieren ...
-
-          await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+          //Orderitems abrufen
+          await callDBResonse(pool, getOrderOrderitems(O_NR));
+          var orderitems = res;
           
-          //Bild anlegen
-        }
-        
-        
-        //Aufträge bei der Produktion anlegen ******************************************
-        
-        //Neue Bestellnummer abfragen
-        await callDBResonse(pool, detectBusiness(O_C_NR));
-        C_CT_ID = res[0].C_CT_ID;
-        
-        //Datum bestimmen
-        await callDBResonse(pool, detectTimestamp(OI_O_NR));
-        O_TIMESTAMP = res[0].O_TIMESTAMP;
-        
-        body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems);
-        await postProductionOrder(body_production);
-      }
-    }      
-    //Neue Bestellnummer abfragen
-    await callDBResonse(pool, getNewOrderID());
-    message = 'Der neue Auftrag hat die Nummer ' + res[0].neworderID +'.';
-
-    var messageJSON = {
-      message: message
-    };
+          body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitems);
+          
+          await postProductionOrder(body_production);
+          //console.log(body_production);
+          
+          messageJSON = {
+            message: 'Der Auftrag '+ O_NR +' wurde an die Produktion übergeben.'
+          };
     
-    response = {
-      statusCode: 200,
-      message: JSON.stringify(messageJSON)
-    }; 
-    return response;
-
+          response = {
+            statusCode: 200,
+            message: JSON.stringify(messageJSON)
+          }; 
+        }
+        else{
+          messageJSON = {
+            message: 'Der Status des Auftrags '+ O_NR +' wurde aktualisiert.'
+          };
+    
+          response = {
+            statusCode: 200,
+            message: JSON.stringify(messageJSON)
+          }; 
+        }
+        
+        return response;
+      }
+    }
+    
   }
   catch (error) {
     console.log(error);
@@ -136,7 +117,7 @@ exports.handler = async (event, context, callback) => {
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-  
+    
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
@@ -177,10 +158,19 @@ async function callDBResonse(client, queryMessage) {
 
 //************ Hilfsfunktionen ************
 
-const buildRequestBodyNewOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems) {
+const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitems) {
   var order;
   var body = [];
   var customerType;
+  var PO_CODE;
+
+  //PO_CODE festlegen
+  if(O_OT_NR == 1){
+    PO_CODE="P";  //P=Preprocessing
+  }
+  else{
+    PO_CODE="N";  //N=NEW
+  }
   
   if(C_CT_ID == "B2C"){
     customerType = "P";
@@ -191,7 +181,7 @@ const buildRequestBodyNewOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_COD
 
   for (var i = 0; i < orderitems.length; i++) {
     order = {
-      O_NR: OI_O_NR,
+      O_NR: O_NR,
       OI_NR: orderitems[i].OI_NR,
       PO_CODE: PO_CODE,
       PO_COUNTER: 1,
@@ -231,38 +221,32 @@ async function postProductionOrder(body) {
 
 //******* SQL Statements *******
 
-const insertNewOrder = function (O_C_NR, O_OT_NR, O_OST_NR) {
-  var queryMessage = "INSERT INTO `ORDER`.`ORDER` (O_C_NR, O_OT_NR, O_OST_NR) VALUES ('" + O_C_NR + "', '" + O_OT_NR + "', '" + O_OST_NR +"');";
+const updateOrderStatus = function (O_NR, O_OST_NR) {
+  var queryMessage = "UPDATE `ORDER`.`ORDER` SET `O_OST_NR` = '" + O_OST_NR + "' WHERE (`O_NR` = '" + O_NR + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const insertNewOrderitem = function (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) {
-  var queryMessage = "INSERT INTO `ORDER`.`ORDERITEM` (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) VALUES ('" + OI_O_NR + "', '" + OI_NR + "', '" + OI_IST_NR +"', '" + OI_MATERIALDESC +"', '" + OI_HEXCOLOR +"', '" + OI_QTY +"', '" + OI_PRICE +"', '" + OI_VAT +"');";
+const checkOrderExist= function (O_NR) {
+  var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const getNewOrderID = function () {
-    var queryMessage = "SELECT max(O_NR) as neworderID FROM VIEWS.ORDERINFO;";
-    //console.log(queryMessage);
-    return (queryMessage);
-};
-
-const checkUserExist= function (C_NR) {
-  var queryMessage = "SELECT * FROM CUSTOMER.CUSTOMER WHERE C_NR='" + C_NR + "';";
+const checkStatusExist= function (OST_NR) {
+  var queryMessage = "SELECT * FROM ORDER.ORDERSTATE WHERE OST_NR = " + OST_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const detectBusiness = function (C_NR) {
-  var queryMessage = "SELECT C_CT_ID FROM CUSTOMER.CUSTOMER WHERE C_NR='" + C_NR + "';";
+const getOrder= function (O_NR) {
+  var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const detectTimestamp = function (OI_O_NR) {
-  var queryMessage = "SELECT O_TIMESTAMP FROM ORDER.ORDER WHERE O_NR='" + OI_O_NR + "';";
+const getOrderOrderitems= function (O_NR) {
+  var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR=" + O_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };

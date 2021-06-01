@@ -60,10 +60,10 @@ exports.handler = async (event, context, callback) => {
       await callDB(pool, deleteOrderImages(O_NR));
 
       //QualityIssues löschen
-      //await callDB(pool, deleteOrderQualityIssue(O_NR));
+      await callDB(pool, deleteOrderQualityIssue(O_NR));
 
       //Return Items löschen
-      //await callDB(pool, deleteOrderItemreturn(O_NR));
+      await callDB(pool, deleteOrderItemreturn(O_NR));
       
       //Orderitems löschen
       await callDB(pool, deleteOrderItems(O_NR));
@@ -155,17 +155,14 @@ const deleteOrderImages = function (O_NR) {
   return (queryMessage);
 };
 
-// Noch fertig implementieren ***********************************
-
 const deleteOrderItemreturn = function (O_NR) {
-  var queryMessage = "SELECT * FROM ORDER.ORDER WHERE O_NR='" + O_NR + "';";
+  var queryMessage = "DELETE * FROM `QUALITY`.`ITEMRETURN` WHERE IR_O_NR='" + O_NR + "';";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
 const deleteOrderQualityIssue = function (O_NR) {
-  var queryMessage = "SELECT * FROM ORDER.ORDER WHERE O_NR='" + O_NR + "';";
+  var queryMessage = "DELETE * FROM `QUALITY`.`QUALITYISSUE` WHERE QI_O_NR='" + O_NR + "';";
   //console.log(queryMessage);
   return (queryMessage);
 };
-

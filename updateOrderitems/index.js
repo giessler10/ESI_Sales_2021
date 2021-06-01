@@ -26,8 +26,7 @@ exports.handler = async (event, context, callback) => {
 
   // get event data
   let O_NR = event.O_NR;  //Ordernummer
-  let orders = event.body;
-  
+  let orderitems = event.body;
 
   try{
     //Prüfen ob die Bestellungen existieren
@@ -61,10 +60,10 @@ exports.handler = async (event, context, callback) => {
       await callDB(pool, deleteOrderImages(O_NR));
 
       //QualityIssues löschen
-      //await callDB(pool, deleteOrderQualityIssue(O_NR));
+      await callDB(pool, deleteOrderQualityIssue(O_NR));
 
       //Return Items löschen
-      //await callDB(pool, deleteOrderItemreturn(O_NR));
+      await callDB(pool, deleteOrderItemreturn(O_NR));
       
       //Orderitems löschen
       await callDB(pool, deleteOrderItems(O_NR));
@@ -73,14 +72,14 @@ exports.handler = async (event, context, callback) => {
       //Neue Orderitems anlegen
       for (var i = 0; i < orderitems.length; i++) {
         //Prüfen, ob Orderitems in MaWi existieren ...
-        await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+        await callDB(pool, insertNewOrderitem(O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
         
         //Bild anlegen
-        //await callDB(pool, insertNewImage());
+        await callDB(pool, insertNewImage(O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
       }
 
       var messageJSON = {
-        message: 'Der Auftrag wurde gelöscht.'
+        message: 'Der Auftrag wurde geändert.'
       };
 
       response = {
@@ -145,7 +144,6 @@ const checkOrderExist = function (O_NR) {
   return (queryMessage);
 };
 
-
 const deleteOrderItems = function (O_NR) {
   var queryMessage = "DELETE FROM `ORDER`.`ORDERITEM` WHERE (`OI_O_NR` = '" + O_NR + "');";
   //console.log(queryMessage);
@@ -164,17 +162,20 @@ const insertNewOrderitem = function (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC,
   return (queryMessage);
 };
 
-// Noch fertig implementieren ***********************************
-
 const deleteOrderItemreturn = function (O_NR) {
-  var queryMessage = "SELECT * FROM ORDER.ORDER WHERE O_NR='" + O_NR + "';";
+  var queryMessage = "DELETE * FROM `QUALITY`.`ITEMRETURN` WHERE IR_O_NR='" + O_NR + "';";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
 const deleteOrderQualityIssue = function (O_NR) {
-  var queryMessage = "SELECT * FROM ORDER.ORDER WHERE O_NR='" + O_NR + "';";
+  var queryMessage = "DELETE * FROM `QUALITY`.`QUALITYISSUE` WHERE QI_O_NR='" + O_NR + "';";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
+const insertNewImage = function (IM_O_NR, IM_OI_NR, IM_POSITION, IM_FILE) {
+  var queryMessage = "INSERT INTO `ORDER`.`IMAGE` (IM_O_NR, IM_OI_NR, IM_POSITION, IM_FILE) VALUES ('" + IM_O_NR + "', '" + IM_OI_NR + "', '" + IM_POSITION + "', '" + IM_FILE + "');";
+  //console.log(queryMessage);
+  return (queryMessage);
+};

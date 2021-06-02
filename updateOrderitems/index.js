@@ -33,7 +33,7 @@ exports.handler = async (event, context, callback) => {
     await callDBResonse(pool, checkOrderExist(O_NR));
     console.log(res);
     if(res == null){
-      message = 'Keine Bestellungen mit der Nummer ' + O_NR + ' gefunden.';
+      message = 'Der Auftrag mit der Nummer ' + O_NR + ' wurde nicht gefunden.';
       
       response = {
         statusCode: 404,

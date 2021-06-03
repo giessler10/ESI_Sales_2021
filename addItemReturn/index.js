@@ -9,7 +9,8 @@ const axios = require('axios');
 var res;
 var message;
 var response;
-var body_production;
+var body_production = [];
+var sendNewProduction = false;
 
 //******* DATABASE CONNECTION *******
 
@@ -59,18 +60,13 @@ exports.handler = async (event, context, callback) => {
     }
     else{
       //Status der Order ändern
-      if(itemReturnItems[i].IR_RT_NR == 1){
-        await callDB(pool, updateOrderStatus(O_NR, 6));
-      }
-      else{
-        await callDB(pool, updateOrderStatus(O_NR, 5));
-      }
+      //await callDB(pool, updateOrderStatus(O_NR, 5));   //Änderung durch DB
 
       //Item Return Issues anlegen und den Status der Orderitems ändern
       for (var i = 0; i < itemReturnItems.length; i++) {
 
         //Item Return anlegen
-        await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 1, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, itemReturnItems[i].IR_IST_NR, itemReturnItems[i].IR_REPRODUCE));
+        await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, itemReturnItems[i].IR_IST_NR, itemReturnItems[i].IR_REPRODUCE));
 
         //Status Orderitem ändern
         if(itemReturnItems[i].IR_RT_NR == 1){
@@ -82,6 +78,7 @@ exports.handler = async (event, context, callback) => {
 
         //Wenn Neuproduktion gewünscht ist ...
         if(itemReturnItems[i].NewProduction == 1){
+          sendNewProduction = true;
 
           //Prüfen, ob Orderitems in MaWi existieren ...
 
@@ -91,23 +88,27 @@ exports.handler = async (event, context, callback) => {
           }
           //Neue Produktion auslösen
           else{
-            
-            //Order abrufen
-            await callDBResonse(pool, getOrder(O_NR));
-            var O_TIMESTAMP = res[0].O_TIMESTAMP;
-            var C_CT_ID = res[0].C_CT_ID;
-            
+            //Get PO_COUNTER
+            await callDBResonse(pool, getMaxPO_COUNTER(O_NR, itemReturnItems[i].QI_OI_NR));
+            var PO_COUNTER = res[0].IR_COUNTER;
+
             //Orderitems abrufen
-            await callDBResonse(pool, getOrderOrderitems(O_NR));
-            var orderitems = res;
+            await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].QI_OI_NR));
+            var orderitem = res[0];
             
-            body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, "RT", orderitems);
+            var order = buildNewOrderObject("R", PO_COUNTER, orderitem);
             
-            await postProductionOrder(body_production);
-            //console.log(body_production);
-            
+            body_production.push(order);
           }
         }
+      }
+
+      if(sendNewProduction){
+
+        body_production = JSON.stringify(body_production);
+            
+        await postProductionOrder(body_production);
+        //console.log(body_production);
       }
  
       var messageJSON = {
@@ -171,33 +172,29 @@ async function callDBResonse(client, queryMessage) {
 
 //************ Hilfsfunktionen ************
 
-const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems) {
-  var order;
-  var body = [];
+const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   var customerType;
 
-  if(C_CT_ID == "B2C"){
+  if(orderitem.C_CT_ID == "B2C"){
     customerType = "P";
   }
   else{
     customerType = "B";
   }
-
-  for (var i = 0; i < orderitems.length; i++) {
-    order = {
-      O_NR: O_NR,
-      OI_NR: orderitems[i].OI_NR,
+  
+  var order = {
+      O_NR: orderitem.O_NR,
+      OI_NR: orderitem.OI_NR,
       PO_CODE: PO_CODE,
-      PO_COUNTER: 1,
-      QUANTITY: orderitems[i].OI_QTY,
+      PO_COUNTER: PO_COUNTER,
+      QUANTITY: orderitem.OI_QTY,
       CUSTOMER_TYPE: customerType,
-      O_DATE: O_TIMESTAMP,
-      IMAGE: orderitems[i].IM_FILE,
-      HEXCOLOR: orderitems[i].OI_HEXCOLOR
-    };
-    body.push(order);
-  }
-  return JSON.stringify(body);
+      O_DATE: orderitem.O_TIMESTAMP,
+      IMAGE: orderitem.IM_FILE,
+      HEXCOLOR: orderitem.OI_HEXCOLOR
+  };
+  
+  return order;
 };
 
 //************ API Call Production ************
@@ -241,20 +238,20 @@ const updateOrderStatus = function (O_NR, O_OST_NR) {
   return (queryMessage);
 };
 
-const insertNewItemReturn = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_RT_NR, IR_QTY, IR_COMMENT, IR_IST_NR, IR_REPRODUCE) {
-  var queryMessage = "INSERT INTO `QUALITY`.`ITEMRETURN` (`IR_O_NR`, `IR_OI_NR`, `IR_COUNTER`, `IR_RT_NR`, `IR_QTY`, `IR_COMMENT`, `IR_IST_NR`, `IR_REPRODUCE`) VALUES ('" + IR_O_NR + "', '" + IR_OI_NR + "', '" + IR_COUNTER + "', '" + IR_RT_NR + "', '" + IR_QTY + "', '" + IR_COMMENT + "', '" + IR_IST_NR + "', '" + IR_REPRODUCE + "');";
+const insertNewItemReturn = function (IR_O_NR, IR_OI_NR, IR_RT_NR, IR_QTY, IR_COMMENT, IR_IST_NR, IR_REPRODUCE) {
+  var queryMessage = "INSERT INTO `QUALITY`.`ITEMRETURN` (`IR_O_NR`, `IR_OI_NR`, `IR_RT_NR`, `IR_QTY`, `IR_COMMENT`, `IR_IST_NR`, `IR_REPRODUCE`) VALUES ('" + IR_O_NR + "', '" + IR_OI_NR + "', '" + IR_RT_NR + "', '" + IR_QTY + "', '" + IR_COMMENT + "', '" + IR_IST_NR + "', '" + IR_REPRODUCE + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const getOrder= function (O_NR) {
-  var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
-  //console.log(queryMessage);
+const getOrderOrderitem= function (O_NR, OI_NR) {
+  var queryMessage = "SELECT O_NR, OI_NR, OI_QTY, C_CT_ID, O_TIMESTAMP, IM_FILE, OI_HEXCOLOR FROM VIEWS.FULLORDER WHERE O_NR = "+ O_NR + " AND OI_NR=" + OI_NR + ";";
+  console.log(queryMessage);
   return (queryMessage);
 };
 
-const getOrderOrderitems= function (O_NR) {
-  var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR=" + O_NR + ";";
+const getMaxPO_COUNTER= function (O_NR, OI_NR) {
+  var queryMessage = "SELECT max(IR_COUNTER) as IR_COUNTER FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + O_NR + " AND IR_OI_NR=" + OI_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };

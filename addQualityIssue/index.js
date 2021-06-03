@@ -10,7 +10,7 @@ const axios = require('axios');
 var res;
 var message;
 var response;
-var body_production;
+var body_production = [];
 
 //******* DATABASE CONNECTION *******
 
@@ -60,16 +60,16 @@ exports.handler = async (event, context, callback) => {
     }
     else{
       //Status der Order ändern
-      await callDB(pool, updateOrderStatus(O_NR, 5));
+      //await callDB(pool, updateOrderStatus(O_NR, 5)); //Wird über DB geändert
 
       //Quality Issues anlegen und den Status der Orderitems ändern
       for (var i = 0; i < qualityIssueItems.length; i++) {
 
         //Quality Issue anlegen
-        await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 1, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
+        await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
 
         //Status Orderitem ändern
-        await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 9));
+        await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
 
         //Prüfen, ob Orderitems in MaWi existieren ...
         var available = false;
@@ -79,21 +79,24 @@ exports.handler = async (event, context, callback) => {
         //Neue Produktion auslösen
         else{
 
-          //Order abrufen
-          await callDBResonse(pool, getOrder(O_NR));
-          var O_TIMESTAMP = res[0].O_TIMESTAMP;
-          var C_CT_ID = res[0].C_CT_ID;
-          
+          //Get PO_COUNTER
+          await callDBResonse(pool, getMaxPO_COUNTER(O_NR, qualityIssueItems[i].QI_OI_NR));
+          var PO_COUNTER = res[0].QI_COUNTER;
+
           //Orderitems abrufen
-          await callDBResonse(pool, getOrderOrderitems(O_NR));
-          var orderitems = res;
+          await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
+          var orderitem = res[0];
           
-          body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, "QS", orderitems);
+          var order = buildNewOrderObject("Q", PO_COUNTER, orderitem);
           
-          await postProductionOrder(body_production);
-          //console.log(body_production);
+          body_production.push(order);
         }
       }
+      
+      body_production = JSON.stringify(body_production);
+          
+      await postProductionOrder(body_production);
+      //console.log(body_production);
  
       var messageJSON = {
         message: 'Die QS wurde erfasst.'
@@ -156,33 +159,29 @@ async function callDBResonse(client, queryMessage) {
 
 //************ Hilfsfunktionen ************
 
-const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems) {
-  var order;
-  var body = [];
+const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   var customerType;
 
-  if(C_CT_ID == "B2C"){
+  if(orderitem.C_CT_ID == "B2C"){
     customerType = "P";
   }
   else{
     customerType = "B";
   }
-
-  for (var i = 0; i < orderitems.length; i++) {
-    order = {
-      O_NR: O_NR,
-      OI_NR: orderitems[i].OI_NR,
+  
+  var order = {
+      O_NR: orderitem.O_NR,
+      OI_NR: orderitem.OI_NR,
       PO_CODE: PO_CODE,
-      PO_COUNTER: 1,
-      QUANTITY: orderitems[i].OI_QTY,
+      PO_COUNTER: PO_COUNTER,
+      QUANTITY: orderitem.OI_QTY,
       CUSTOMER_TYPE: customerType,
-      O_DATE: O_TIMESTAMP,
-      IMAGE: orderitems[i].IM_FILE,
-      HEXCOLOR: orderitems[i].OI_HEXCOLOR
-    };
-    body.push(order);
-  }
-  return JSON.stringify(body);
+      O_DATE: orderitem.O_TIMESTAMP,
+      IMAGE: orderitem.IM_FILE,
+      HEXCOLOR: orderitem.OI_HEXCOLOR
+  };
+  
+  return order;
 };
 
 //************ API Call Production ************
@@ -226,20 +225,20 @@ const updateOrderStatus = function (O_NR, O_OST_NR) {
   return (queryMessage);
 };
 
-const insertNewQualityIssue = function (QI_O_NR, QI_OI_NR, QI_COUNTER, QI_IST_NR, QI_QTY, QI_COMMENT) {
-  var queryMessage = "INSERT INTO `QUALITY`.`QUALITYISSUE` (QI_O_NR, QI_OI_NR, QI_COUNTER, QI_IST_NR, QI_QTY, QI_COMMENT) VALUES ('" + QI_O_NR + "', '" + QI_OI_NR + "', '" + QI_COUNTER + "', '" + QI_IST_NR + "', '" + QI_QTY + "', '" + QI_COMMENT + "');";
+const insertNewQualityIssue = function (QI_O_NR, QI_OI_NR, QI_IST_NR, QI_QTY, QI_COMMENT) {
+  var queryMessage = "INSERT INTO `QUALITY`.`QUALITYISSUE` (QI_O_NR, QI_OI_NR, QI_IST_NR, QI_QTY, QI_COMMENT) VALUES ('" + QI_O_NR + "', '" + QI_OI_NR + "', '" + QI_IST_NR + "', '" + QI_QTY + "', '" + QI_COMMENT + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const getOrder= function (O_NR) {
-  var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
-  //console.log(queryMessage);
+const getOrderOrderitem= function (O_NR, OI_NR) {
+  var queryMessage = "SELECT O_NR, OI_NR, OI_QTY, C_CT_ID, O_TIMESTAMP, IM_FILE, OI_HEXCOLOR FROM VIEWS.FULLORDER WHERE O_NR = "+ O_NR + " AND OI_NR=" + OI_NR + ";";
+  console.log(queryMessage);
   return (queryMessage);
 };
 
-const getOrderOrderitems= function (O_NR) {
-  var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR=" + O_NR + ";";
+const getMaxPO_COUNTER= function (O_NR, OI_NR) {
+  var queryMessage = "SELECT max(QI_COUNTER) as QI_COUNTER FROM QUALITY.QUALITYISSUE WHERE QI_O_NR=" + O_NR + " AND QI_OI_NR=" + OI_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };

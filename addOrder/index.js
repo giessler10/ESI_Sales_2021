@@ -75,15 +75,17 @@ exports.handler = async (event, context, callback) => {
         //Orderitems anlegen
         for (var i = 0; i < orderitems.length; i++) {
           //Prüfen, ob Orderitems in MaWi existieren ...
+          
           await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
           
           //Bild anlegen
+          await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
         }
       }
       
       //Bestellung direkt an Produktion weiterleiten
       else{
-        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR, 1));
+        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR, 9));
         
         //Neue Bestellnummer abfragen
         await callDBResonse(pool, getNewOrderID());
@@ -93,9 +95,10 @@ exports.handler = async (event, context, callback) => {
         for (var i = 0; i < orderitems.length; i++) {
           //Prüfen, ob Orderitems in MaWi existieren ...
 
-          await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 2, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+          await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
           
           //Bild anlegen
+          await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
         }
         
         
@@ -111,6 +114,19 @@ exports.handler = async (event, context, callback) => {
         
         body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems);
         await postProductionOrder(body_production);
+
+
+        //Wenn DB bei Produktion online ist und der Auftrag übermittelt wurde ***********************************************
+
+        //Order aktualisieren
+        await callDB(pool, updateOrderStatus(O_NR, 1));
+
+        //Status Oderitems
+
+        //@Chris: Wie bekommen wir den Status der Orderitems auf 2?
+        var sqlQuery = buildSQLString(orderitems, 2);
+        await callDB(pool, sqlQuery); //New oder Preproduction
+
       }
     }      
     //Neue Bestellnummer abfragen
@@ -206,6 +222,28 @@ const buildRequestBodyNewOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_COD
   return JSON.stringify(body);
 };
 
+function buildSQLString(orders, IST_NR) {
+  var whereNew;
+  
+  var queryMessageNew;
+
+  for (var i = 0; i < orders.length; i++) {
+    //New (N) Orderitems or Preproduction (P)
+    if (orders[i]["PO_CODE"] == "P" || orders[i]["PO_CODE"] == "N"){
+      if (whereNew == undefined) {
+        whereNew = "where (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
+      } 
+      else{
+       whereNew += " or (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
+      }
+    }
+  }
+ 
+  queryMessageNew = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " " + whereNew + "";
+
+  return queryMessageNew;
+}
+
 
 //************ API Call Production ************
 
@@ -263,6 +301,18 @@ const detectBusiness = function (C_NR) {
 
 const detectTimestamp = function (OI_O_NR) {
   var queryMessage = "SELECT O_TIMESTAMP FROM ORDER.ORDER WHERE O_NR='" + OI_O_NR + "';";
+  //console.log(queryMessage);
+  return (queryMessage);
+};
+
+const insertNewImage = function (IM_O_NR, IM_OI_NR, IM_POSITION, IM_FILE) {
+  var queryMessage = "INSERT INTO `ORDER`.`IMAGE` (IM_O_NR, IM_OI_NR, IM_POSITION, IM_FILE) VALUES ('" + IM_O_NR + "', '" + IM_OI_NR + "', '" + IM_POSITION + "', '" + IM_FILE + "');";
+  //console.log(queryMessage);
+  return (queryMessage);
+};
+
+const updateOrderStatus = function (O_NR, O_OST_NR) {
+  var queryMessage = "UPDATE `ORDER`.`ORDER` SET `O_OST_NR` = '" + O_OST_NR + "' WHERE (`O_NR` = '" + O_NR + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };

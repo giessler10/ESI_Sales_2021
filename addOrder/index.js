@@ -15,6 +15,7 @@ var OI_O_NR; //Bestellnummer
 var C_CT_ID; //Kundentyp
 var O_TIMESTAMP; //Zeit
 var PO_CODE;
+var orderitemIndex;
 
 //******* DATABASE CONNECTION *******
 
@@ -32,13 +33,9 @@ exports.handler = async (event, context, callback) => {
 
   // get event data
   let O_C_NR = event.C_NR;        //Kundennummer
-  let O_OT_NR = event.O_OT_NR;    //Bestelltyp 1=internal | 2=external
+  //let O_OT_NR = event.O_OT_NR;    //Bestelltyp 1=internal | 2=external
   let draft = event.draft;
   let orderitems = event.orderitems;
-  //let O_OST_NR = event.O_OST_NR; -> Always set fixed value of 1 (Open) for Orderstate
-  //let O_TIMESTAMP = event.O_TIMESTAMP; -> Not needed, because MySQL will automatically set the Timestamp when Data was Inserted
-
-
 
   try{
     //Prüfen ob der User existiert
@@ -57,91 +54,122 @@ exports.handler = async (event, context, callback) => {
     }
     else{
       //Bestelltyp festlegen
-      if(O_OT_NR == 1){
+      if(O_C_NR == 0){
         PO_CODE="P";  //P=Preprocessing
-      }
-      else{
-        PO_CODE="N";  //N=NEW
-      }
-      
-      //Bestellung als Enwurf anlegen
-      if(draft == true){
-        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR, 9));
-        
-        //Neue Bestellnummer abfragen
-        await callDBResonse(pool, getNewOrderID());
-        OI_O_NR = res[0].neworderID;
-        
-        //Orderitems anlegen
-        for (var i = 0; i < orderitems.length; i++) {
-          //Prüfen, ob Orderitems in MaWi existieren ...
-          
-          await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
-          
-          //Bild anlegen
-          await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
-        }
-      }
-      
-      //Bestellung direkt an Produktion weiterleiten
-      else{
-        await callDB(pool, insertNewOrder(O_C_NR, O_OT_NR, 9));
-        
-        //Neue Bestellnummer abfragen
-        await callDBResonse(pool, getNewOrderID());
-        OI_O_NR = res[0].neworderID;
-        
-        //Orderitems anlegen
-        for (var i = 0; i < orderitems.length; i++) {
-          //Prüfen, ob Orderitems in MaWi existieren ...
 
-          await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
-          
-          //Bild anlegen
-          await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
-        }
+        //Aktuelles Datum
+        O_TIMESTAMP = new Date().getTime();
         
+        //Index abfragen
+        await callDBResonse(pool, getOrderitemIndex(0));
+        orderitemIndex = res[0].orderitemIndex;
         
-        //Aufträge bei der Produktion anlegen ******************************************
-        
-        //Neue Bestellnummer abfragen
-        await callDBResonse(pool, detectBusiness(O_C_NR));
-        C_CT_ID = res[0].C_CT_ID;
-        
-        //Datum bestimmen
-        await callDBResonse(pool, detectTimestamp(OI_O_NR));
-        O_TIMESTAMP = res[0].O_TIMESTAMP;
-        
-        body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems);
+        body_production = buildRequestBodyNewPreOrder(0, "B2B", O_TIMESTAMP, PO_CODE, orderitems, orderitemIndex);
         await postProductionOrder(body_production);
 
+        //Orderitems anlegen
+        for (var i = 0; i < orderitems.length; i++) {
+          //Prüfen, ob Orderitems in MaWi existieren ...
+          orderitemIndex +=1;
 
-        //Wenn DB bei Produktion online ist und der Auftrag übermittelt wurde ***********************************************
+          await callDB(pool, insertNewOrderitem(0, orderitemIndex , 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+          
+          //Bild anlegen
+          await callDB(pool, insertNewImage(0, orderitemIndex, 1, orderitems[i].IM_FILE));
+        }
+        
+        message = 'Die Vorproduktion wurde angelegt.';
 
-        //Order aktualisieren
-        await callDB(pool, updateOrderStatus(O_NR, 1));
+        var messageJSON = {
+          message: message
+        };
+        
+        response = {
+          statusCode: 200,
+          message: JSON.stringify(messageJSON)
+        }; 
+        return response;
+      }
+      else{
+        //N=NEW
+        PO_CODE="N";
 
-        //Status Oderitems
+        //Bestellung als Enwurf anlegen
+        if(draft == true){
+          await callDB(pool, insertNewOrder(O_C_NR, 9));
+          
+          //Neue Bestellnummer abfragen
+          await callDBResonse(pool, getNewOrderID());
+          OI_O_NR = res[0].neworderID;
+          
+          //Orderitems anlegen
+          for (var i = 0; i < orderitems.length; i++) {
+            //Prüfen, ob Orderitems in MaWi existieren ...
+            
+            await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+            
+            //Bild anlegen
+            await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
+          }
+        }
+        
+        //Bestellung direkt an Produktion weiterleiten
+        else{
+          await callDB(pool, insertNewOrder(O_C_NR, 9));
+          
+          //Neue Bestellnummer abfragen
+          await callDBResonse(pool, getNewOrderID());
+          OI_O_NR = res[0].neworderID;
+          
+          //Orderitems anlegen
+          for (var i = 0; i < orderitems.length; i++) {
+            //Prüfen, ob Orderitems in MaWi existieren ...
 
-        //@Chris: Wie bekommen wir den Status der Orderitems auf 2?
-        var sqlQuery = buildSQLString(orderitems, 2);
-        await callDB(pool, sqlQuery); //New oder Preproduction
+            await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+            
+            //Bild anlegen
+            await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
+          }
+          
+          
+          //Aufträge bei der Produktion anlegen ******************************************
+          
+          //Neue Bestellnummer abfragen
+          await callDBResonse(pool, detectBusiness(O_C_NR));
+          C_CT_ID = res[0].C_CT_ID;
+          
+          //Datum bestimmen
+          await callDBResonse(pool, detectTimestamp(OI_O_NR));
+          O_TIMESTAMP = res[0].O_TIMESTAMP;
+          
+          body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems);
+          await postProductionOrder(body_production);
+
+
+          //Wenn DB bei Produktion online ist und der Auftrag übermittelt wurde ***********************************************
+
+          //Order aktualisieren
+          await callDB(pool, updateOrderStatus(OI_O_NR, 1));
+
+        }
+
+        //Neue Bestellnummer abfragen
+        await callDBResonse(pool, getNewOrderID());
+        message = 'Der neue Auftrag hat die Nummer ' + res[0].neworderID +'.';
+
+        var messageJSON = {
+          message: message
+        };
+        
+        response = {
+          statusCode: 200,
+          message: JSON.stringify(messageJSON)
+        }; 
+        return response;
 
       }
+      
     }      
-    //Neue Bestellnummer abfragen
-    await callDBResonse(pool, getNewOrderID());
-    message = 'Der neue Auftrag hat die Nummer ' + res[0].neworderID +'.';
-
-    var messageJSON = {
-      message: message
-    };
-    
-    response = {
-      statusCode: 200,
-      message: JSON.stringify(messageJSON)
-    }; 
-    return response;
 
   }
   catch (error) {
@@ -222,27 +250,36 @@ const buildRequestBodyNewOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_COD
   return JSON.stringify(body);
 };
 
-function buildSQLString(orders, IST_NR) {
-  var whereNew;
+const buildRequestBodyNewPreOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems, orderitemIndex) {
+  var order;
+  var body = [];
+  var customerType;
+  var currentOrderitemIndex = orderitemIndex;
   
-  var queryMessageNew;
-
-  for (var i = 0; i < orders.length; i++) {
-    //New (N) Orderitems or Preproduction (P)
-    if (orders[i]["PO_CODE"] == "P" || orders[i]["PO_CODE"] == "N"){
-      if (whereNew == undefined) {
-        whereNew = "where (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
-      } 
-      else{
-       whereNew += " or (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
-      }
-    }
+  if(C_CT_ID == "B2C"){
+    customerType = "P";
   }
- 
-  queryMessageNew = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " " + whereNew + "";
+  else{
+    customerType = "B";
+  }
 
-  return queryMessageNew;
-}
+  for (var i = 0; i < orderitems.length; i++) {
+    currentOrderitemIndex +=1;
+    order = {
+      O_NR: OI_O_NR,
+      OI_NR: currentOrderitemIndex,
+      PO_CODE: PO_CODE,
+      PO_COUNTER: 1,
+      QUANTITY: orderitems[i].OI_QTY,
+      CUSTOMER_TYPE: customerType,
+      O_DATE: O_TIMESTAMP,
+      IMAGE: orderitems[i].IM_FILE,
+      HEXCOLOR: orderitems[i].OI_HEXCOLOR
+    };
+    body.push(order);
+  }
+  return JSON.stringify(body);
+};
 
 
 //************ API Call Production ************
@@ -269,8 +306,8 @@ async function postProductionOrder(body) {
 
 //******* SQL Statements *******
 
-const insertNewOrder = function (O_C_NR, O_OT_NR, O_OST_NR) {
-  var queryMessage = "INSERT INTO `ORDER`.`ORDER` (O_C_NR, O_OT_NR, O_OST_NR) VALUES ('" + O_C_NR + "', '" + O_OT_NR + "', '" + O_OST_NR +"');";
+const insertNewOrder = function (O_C_NR, O_OST_NR) {
+  var queryMessage = "INSERT INTO `ORDER`.`ORDER` (O_C_NR, O_OST_NR) VALUES ('" + O_C_NR + "', '" + O_OST_NR +"');";
   //console.log(queryMessage);
   return (queryMessage);
 };
@@ -282,7 +319,7 @@ const insertNewOrderitem = function (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC,
 };
 
 const getNewOrderID = function () {
-    var queryMessage = "SELECT max(O_NR) as neworderID FROM VIEWS.ORDERINFO;";
+    var queryMessage = "SELECT max(O_NR) as neworderID FROM ORDER.ORDER;";
     //console.log(queryMessage);
     return (queryMessage);
 };
@@ -313,6 +350,12 @@ const insertNewImage = function (IM_O_NR, IM_OI_NR, IM_POSITION, IM_FILE) {
 
 const updateOrderStatus = function (O_NR, O_OST_NR) {
   var queryMessage = "UPDATE `ORDER`.`ORDER` SET `O_OST_NR` = '" + O_OST_NR + "' WHERE (`O_NR` = '" + O_NR + "');";
+  //console.log(queryMessage);
+  return (queryMessage);
+};
+
+const getOrderitemIndex = function (O_NR) {
+  var queryMessage = "SELECT max(OI_NR) as orderitemIndex FROM ORDER.ORDERITEM WHERE OI_O_NR='" + O_NR + "';";
   //console.log(queryMessage);
   return (queryMessage);
 };

@@ -96,12 +96,6 @@ exports.handler = async (event, context, callback) => {
 
           //Order aktualisieren
           await callDB(pool, updateOrderStatus(O_NR,OST_NR));
-
-          //Status Oderitems
-
-          //@Chris: Wie bekommen wir den Status der Orderitems auf 2?
-          var sqlQuery = buildSQLString(orderitems, 2);
-          await callDB(pool, sqlQuery); //New oder Preproduction
           
           messageJSON = {
             message: 'Der Auftrag '+ O_NR +' wurde an die Produktion übergeben.'
@@ -115,12 +109,6 @@ exports.handler = async (event, context, callback) => {
         else{
           //Order aktualisieren
           await callDB(pool, updateOrderStatus(O_NR,OST_NR));
-
-          //Status Oderitems
-
-          //@Chris: Wie bekommen wir den Status der Orderitems auf 2?
-          var sqlQuery = buildSQLString(orderitems, 2);
-          await callDB(pool, sqlQuery); //New oder Preproduction
 
           messageJSON = {
             message: 'Der Status des Auftrags '+ O_NR +' wurde aktualisiert.'
@@ -194,28 +182,6 @@ const IsDataBaseOffline = function (res){
       return true;
   }     
   return false;
-}
-
-function buildSQLString(orders, IST_NR) {
-  var whereNew;
-  
-  var queryMessageNew;
-
-  for (var i = 0; i < orders.length; i++) {
-    //New (N) Orderitems or Preproduction (P)
-    if (orders[i]["PO_CODE"] == "P" || orders[i]["PO_CODE"] == "N"){
-      if (whereNew == undefined) {
-        whereNew = "where (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
-      } 
-      else{
-       whereNew += " or (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
-      }
-    }
-  }
- 
-  queryMessageNew = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " " + whereNew + "";
-
-  return queryMessageNew;
 }
 
 const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitems) {

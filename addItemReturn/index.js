@@ -13,6 +13,7 @@ var body_production = [];
 var body_production_Parsed;
 
 var body_mawi;
+var orderitemMaWi = [];
 var stored;
 
 var new_IR_Counter;
@@ -99,11 +100,13 @@ exports.handler = async (event, context, callback) => {
 
             //Prüfen, ob Orderitem in MaWi existiert
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
-            await callDBResonse(pool, getOrderAvailability(body_mawi));
+            await putOrderAvailability(body_mawi);
 
             if(stored){
-              //Status ItemReturn aktualisieren
-              await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
+              //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
+              orderitemMaWi.push(orderitems[i]);
+
+              //await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
 
             }
             //Neue Produktion auslösen
@@ -136,11 +139,13 @@ exports.handler = async (event, context, callback) => {
 
             //Prüfen, ob Orderitem in MaWi existiert
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
-            await callDBResonse(pool, getOrderAvailability(body_mawi));
+            await putOrderAvailability(body_mawi);
 
             if(stored){
-              //Status ItemReturn aktualisieren
-              await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
+              //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
+              orderitemMaWi.push(orderitems[i]);
+
+              //await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
 
             }
             //Neue Produktion auslösen
@@ -159,7 +164,12 @@ exports.handler = async (event, context, callback) => {
         await postProductionOrder(body_production_Parsed);
         //console.log(body_production_Parsed);
       }
- 
+
+      //Orderitems die verfügbar waren aktualisieren
+      for (var i = 0; i < orderitemMaWi.length; i++) {
+        await callDB(pool, updateOrderitemStatus(O_NR, orderitemMaWi[i].OI_NR, 5));
+      }
+
       var messageJSON = {
         message: 'Die Retoure / Reklamation wurde erfasst.'
       };
@@ -221,18 +231,20 @@ async function callDBResonse(client, queryMessage) {
 
 //************ Hilfsfunktionen ************
 const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
+  var body = [];
+  var currentOrder = {
+    O_NR: OI_O_NR,
+    OI_NR: orderitem.OI_NR,
+    PO_CODE: PO_CODE,
+    PO_COUNTER: 1,
+    QUANTITY: orderitem.OI_QTY,
+    HEXCOLOR: orderitem.OI_HEXCOLOR,
+    IMAGE: orderitem.IM_FILE
+  };
+  body.push(currentOrder);
+  
   var resonse = {
-    body: [
-      {
-        "O_NR": OI_O_NR,
-        "OI_NR": orderitem.OI_NR,
-        "PO_CODE": PO_CODE,
-        "PO_COUNTER": "1",
-        "QUANTITY": orderitem.OI_QTY,
-        "HEXCOLOR": orderitem.HEXCOLOR,
-        "IMAGE": orderitem.IM_FILE
-      }
-    ]
+    body: body
   };
   
   console.log(resonse);
@@ -285,12 +297,15 @@ async function postProductionOrder(body) {
   
   await axios.post('https://1ygz8xt0rc.execute-api.eu-central-1.amazonaws.com/main/createorder', body)
     .then((results) => {
+      
+      if(IsDataBaseOffline(results)){
+        return; //Check if db is available
+      }
 
       parsed = JSON.stringify(results.data);
-      console.log(parsed);
+      //console.log(parsed);
       res = JSON.parse(parsed);
       res = res.body;
-      console.log(res);
       return results;
     })
     .catch((error) => {
@@ -300,17 +315,16 @@ async function postProductionOrder(body) {
 
 //************ API Call MaWi ************
 
-async function getOrderAvailability(body) {
+async function putOrderAvailability(body) {
   let parsed;
-  //console.log(body);
   
-  await axios.get('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/gervorproduktionvv', body)
+  await axios.put('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/putvorproduktion', body)
     .then((results) => {
-
+      
       if(IsDataBaseOffline(results)){
         stored = false;
         return; //Check if db is available
-      } 
+      }
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);

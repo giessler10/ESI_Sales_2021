@@ -11,6 +11,10 @@ var res;
 var message;
 var response;
 var body_production;
+var orderitemProduce = [];
+var body_mawi;
+var stored;
+
 var OI_O_NR; //Bestellnummer
 var C_CT_ID; //Kundentyp
 var O_TIMESTAMP; //Zeit
@@ -53,7 +57,7 @@ exports.handler = async (event, context, callback) => {
       context.fail(JSON.stringify(response));
     }
     else{
-      //Bestelltyp festlegen
+      //Vorproduktion
       if(O_C_NR == 0){
         PO_CODE="P";  //P=Preprocessing
 
@@ -69,7 +73,6 @@ exports.handler = async (event, context, callback) => {
 
         //Orderitems anlegen
         for (var i = 0; i < orderitems.length; i++) {
-          //Prüfen, ob Orderitems in MaWi existieren ...
           orderitemIndex +=1;
 
           await callDB(pool, insertNewOrderitem(0, orderitemIndex , 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
@@ -104,7 +107,6 @@ exports.handler = async (event, context, callback) => {
           
           //Orderitems anlegen
           for (var i = 0; i < orderitems.length; i++) {
-            //Prüfen, ob Orderitems in MaWi existieren ...
             
             await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
             
@@ -123,34 +125,46 @@ exports.handler = async (event, context, callback) => {
           
           //Orderitems anlegen
           for (var i = 0; i < orderitems.length; i++) {
-            //Prüfen, ob Orderitems in MaWi existieren ...
 
             await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
             
             //Bild anlegen
             await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
           }
-          
+
+          //Prüfen, ob Orderitems in MaWi existieren *************************************
+          for (var i = 0; i < orderitems.length; i++) {
+            body_mawi = buildRequestBodyOrderMaWi(OI_O_NR, PO_CODE, orderitems[i]);
+            await callDBResonse(pool, getOrderAvailability(body_mawi));
+
+            if(stored){
+              //Wenn verfügbar, Orderitem auf Status 5 (Stored) aktualisieren
+              await callDB(pool, updateOrderitemStatus(OI_O_NR, orderitems[i].OI_NR, 5));            
+            }
+            else{
+              //Zu den zu produzierenden Orderitems für die Produktion hinzufügen
+              orderitemProduce.push(orderitems[i]);
+            }
+          }
           
           //Aufträge bei der Produktion anlegen ******************************************
-          
-          //Neue Bestellnummer abfragen
-          await callDBResonse(pool, detectBusiness(O_C_NR));
-          C_CT_ID = res[0].C_CT_ID;
-          
-          //Datum bestimmen
-          await callDBResonse(pool, detectTimestamp(OI_O_NR));
-          O_TIMESTAMP = res[0].O_TIMESTAMP;
-          
-          body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems);
-          await postProductionOrder(body_production);
+          if(orderitemProduce.length != 0){
+            //Neue Bestellnummer abfragen
+            await callDBResonse(pool, detectBusiness(O_C_NR));
+            C_CT_ID = res[0].C_CT_ID;
+            
+            //Datum bestimmen
+            await callDBResonse(pool, detectTimestamp(OI_O_NR));
+            O_TIMESTAMP = res[0].O_TIMESTAMP;
+            
+            body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitemProduce);
+            await postProductionOrder(body_production);
+          }
 
-
-          //Wenn DB bei Produktion online ist und der Auftrag übermittelt wurde ***********************************************
+          //Wenn DB bei Produktion und MaWi online ist und der Auftrag übermittelt wurde ***********************************************
 
           //Order aktualisieren
           await callDB(pool, updateOrderStatus(OI_O_NR, 1));
-
         }
 
         //Neue Bestellnummer abfragen
@@ -220,6 +234,24 @@ async function callDBResonse(client, queryMessage) {
 }
 
 //************ Hilfsfunktionen ************
+const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
+  var resonse = {
+    body: [
+      {
+        "O_NR": OI_O_NR,
+        "OI_NR": orderitem.OI_NR,
+        "PO_CODE": PO_CODE,
+        "PO_COUNTER": "1",
+        "QUANTITY": orderitem.OI_QTY,
+        "HEXCOLOR": orderitem.HEXCOLOR,
+        "IMAGE": orderitem.IM_FILE
+      }
+    ]
+  };
+  
+  console.log(resonse);
+  return JSON.stringify(resonse);
+};
 
 const buildRequestBodyNewOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitems) {
   var order;
@@ -281,6 +313,18 @@ const buildRequestBodyNewPreOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_
   return JSON.stringify(body);
 };
 
+//Check if database is offline (AWS)
+const IsDataBaseOffline = function (res){
+
+  if(res.data.errorMessage == null) return false; 
+  if(res.data.errorMessage === 'undefined') return false;
+  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
+      alert("Database is offline (AWS).");
+      return true;
+  }     
+  return false;
+};
+
 
 //************ API Call Production ************
 
@@ -300,8 +344,32 @@ async function postProductionOrder(body) {
     })
     .catch((error) => {
       console.error(error);
+    }); 
+}
+
+//************ API Call MaWi ************
+
+async function getOrderAvailability(body) {
+  let parsed;
+  //console.log(body);
+  
+  await axios.get('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/gervorproduktionvv', body)
+    .then((results) => {
+
+      if(IsDataBaseOffline(results)){
+        stored = false;
+        return; //Check if db is available
+      } 
+
+      parsed = JSON.stringify(results.data);
+      //console.log(parsed);
+      res = JSON.parse(parsed);
+      stored = res.stored;
+      return results;
+    })
+    .catch((error) => {
+      console.error(error);
     });
-    
 }
 
 //******* SQL Statements *******
@@ -356,6 +424,12 @@ const updateOrderStatus = function (O_NR, O_OST_NR) {
 
 const getOrderitemIndex = function (O_NR) {
   var queryMessage = "SELECT max(OI_NR) as orderitemIndex FROM ORDER.ORDERITEM WHERE OI_O_NR='" + O_NR + "';";
+  //console.log(queryMessage);
+  return (queryMessage);
+};
+
+const updateOrderitemStatus = function (O_NR, OI_NR, IST_NR) {
+  var queryMessage = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " WHERE OI_O_NR = " + O_NR + " AND OI_NR = " + OI_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };

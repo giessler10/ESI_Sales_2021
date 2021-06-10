@@ -13,6 +13,9 @@ var response;
 var messageJSON;
 
 var body_production;
+var orderitemProduce = [];
+var body_mawi;
+var stored;
 
 //******* DATABASE CONNECTION *******
 
@@ -76,29 +79,46 @@ exports.handler = async (event, context, callback) => {
           //Orderitems abrufen
           await callDBResonse(pool, getOrderOrderitems(O_NR));
           var orderitems = res;
-          
-          body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitems);
-          
-          await postProductionOrder(body_production);
-          //console.log(body_production);
 
-          if(IsDataBaseOffline(res)){
-            message = 'Die Datenbank der Produktion ist offline! Der Auftrag konnte nicht übergeben werden.';
-        
-            response = {
-              statusCode: 500,
-              errorMessage: message,
-              errorType: "Internal Server Error"
-            };
-            //Fehler schmeisen
-            context.fail(JSON.stringify(response));
+          //Prüfen, ob Orderitems in MaWi existieren *************************************
+          for (var i = 0; i < orderitems.length; i++) {
+            body_mawi = buildRequestBodyOrderMaWi(O_NR, "N", orderitems[i]);
+            await callDBResonse(pool, getOrderAvailability(body_mawi));
+
+            if(stored){
+              //Wenn verfügbar, Orderitem auf Status 5 (Stored) aktualisieren
+              await callDB(pool, updateOrderitemStatus(O_NR, orderitems[i].OI_NR, 5));       
+            }
+            else{
+              //Zu den zu produzierenden Orderitems für die Produktion hinzufügen
+              orderitemProduce.push(orderitems[i]);
+            }
+          }
+
+          if(orderitemProduce.length != 0){
+            body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitemProduce);
+            
+            await postProductionOrder(body_production);
+            //console.log(body_production);
+
+            if(IsDataBaseOffline(res)){
+              message = 'Die Datenbank der Produktion ist offline! Der Auftrag konnte nicht übergeben werden.';
+          
+              response = {
+                statusCode: 500,
+                errorMessage: message,
+                errorType: "Internal Server Error"
+              };
+              //Fehler schmeisen
+              context.fail(JSON.stringify(response));
+            }
           }
 
           //Order aktualisieren
           await callDB(pool, updateOrderStatus(O_NR,OST_NR));
           
           messageJSON = {
-            message: 'Der Auftrag '+ O_NR +' wurde an die Produktion übergeben.'
+            message: 'Der Auftrag '+ O_NR +' wurde beauftragt.'
           };
     
           response = {
@@ -173,16 +193,24 @@ async function callDBResonse(client, queryMessage) {
 }
 
 //************ Hilfsfunktionen ************
-
-const IsDataBaseOffline = function (res){
-  if(res.errorMessage == null) return false; 
-  if(res.errorMessage === 'undefined') return false;
-  if(res.errorMessage.endsWith("timed out after 3.00 seconds")){
-      //console.log("Database is offline (AWS).");
-      return true;
-  }     
-  return false;
-}
+const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
+  var resonse = {
+    body: [
+      {
+        "O_NR": OI_O_NR,
+        "OI_NR": orderitem.OI_NR,
+        "PO_CODE": PO_CODE,
+        "PO_COUNTER": "1",
+        "QUANTITY": orderitem.OI_QTY,
+        "HEXCOLOR": orderitem.HEXCOLOR,
+        "IMAGE": orderitem.IM_FILE
+      }
+    ]
+  };
+  
+  console.log(resonse);
+  return JSON.stringify(resonse);
+};
 
 const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitems) {
   var order;
@@ -222,6 +250,17 @@ const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, 
   return JSON.stringify(body);
 };
 
+//Check if database is offline (AWS)
+const IsDataBaseOffline = function (res){
+
+  if(res.data.errorMessage == null) return false; 
+  if(res.data.errorMessage === 'undefined') return false;
+  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
+      alert("Database is offline (AWS).");
+      return true;
+  }     
+  return false;
+};
 
 //************ API Call Production ************
 
@@ -240,6 +279,31 @@ async function postProductionOrder(body) {
     .catch((error) => {
       console.error(error);
     });  
+}
+
+//************ API Call MaWi ************
+
+async function getOrderAvailability(body) {
+  let parsed;
+  //console.log(body);
+  
+  await axios.get('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/gervorproduktionvv', body)
+    .then((results) => {
+
+      if(IsDataBaseOffline(results)){
+        stored = false;
+        return; //Check if db is available
+      } 
+
+      parsed = JSON.stringify(results.data);
+      //console.log(parsed);
+      res = JSON.parse(parsed);
+      stored = res.stored;
+      return results;
+    })
+    .catch((error) => {
+      console.error(error);
+    });
 }
 
 //******* SQL Statements *******
@@ -270,6 +334,12 @@ const getOrder= function (O_NR) {
 
 const getOrderOrderitems= function (O_NR) {
   var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR=" + O_NR + ";";
+  //console.log(queryMessage);
+  return (queryMessage);
+};
+
+const updateOrderitemStatus = function (O_NR, OI_NR, IST_NR) {
+  var queryMessage = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " WHERE OI_O_NR = " + O_NR + " AND OI_NR = " + OI_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };

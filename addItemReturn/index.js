@@ -12,7 +12,9 @@ var response;
 var body_production = [];
 var body_production_Parsed;
 
-var available;
+var body_mawi;
+var stored;
+
 var new_IR_Counter;
 var orderitem;
 var order;
@@ -91,20 +93,22 @@ exports.handler = async (event, context, callback) => {
           if(itemReturnItems[i].NewProduction == 1){
             sendNewProduction = true;
 
-            //Prüfen, ob Orderitems in MaWi existieren ...
+            //Orderitem abrufen
+            await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].IR_OI_NR));
+            orderitem = res[0];
 
-            var available = false;
-            if(available){
-              //API Call MaWi
+            //Prüfen, ob Orderitem in MaWi existiert
+            body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
+            await callDBResonse(pool, getOrderAvailability(body_mawi));
+
+            if(stored){
+              //Status ItemReturn aktualisieren
+              await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
+
             }
             //Neue Produktion auslösen
             else{
-              //Orderitems abrufen
-              await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].QI_OI_NR));
-              orderitem = res[0];
-              
               order = buildNewOrderObject("R", new_IR_Counter, orderitem);
-              
               body_production.push(order);
             }
           }
@@ -127,20 +131,21 @@ exports.handler = async (event, context, callback) => {
           if(itemReturnItems[i].NewProduction == 1){
             sendNewProduction = true;
 
-            //Prüfen, ob Orderitems in MaWi existieren ...
+            await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].IR_OI_NR));
+            orderitem = res[0];
 
-            var available = false;
-            if(available){
-              //API Call MaWi
+            //Prüfen, ob Orderitem in MaWi existiert
+            body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
+            await callDBResonse(pool, getOrderAvailability(body_mawi));
+
+            if(stored){
+              //Status ItemReturn aktualisieren
+              await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
+
             }
             //Neue Produktion auslösen
             else{
-              //Orderitems abrufen
-              await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].QI_OI_NR));
-              orderitem = res[0];
-              
               order = buildNewOrderObject("R", new_IR_Counter, orderitem);
-              
               body_production.push(order);
             }
           }
@@ -215,7 +220,26 @@ async function callDBResonse(client, queryMessage) {
 }
 
 //************ Hilfsfunktionen ************
+const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
+  var resonse = {
+    body: [
+      {
+        "O_NR": OI_O_NR,
+        "OI_NR": orderitem.OI_NR,
+        "PO_CODE": PO_CODE,
+        "PO_COUNTER": "1",
+        "QUANTITY": orderitem.OI_QTY,
+        "HEXCOLOR": orderitem.HEXCOLOR,
+        "IMAGE": orderitem.IM_FILE
+      }
+    ]
+  };
+  
+  console.log(resonse);
+  return JSON.stringify(resonse);
+};
 
+//Produktion
 const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   var customerType;
 
@@ -241,6 +265,18 @@ const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   return order;
 };
 
+//Check if database is offline (AWS)
+const IsDataBaseOffline = function (res){
+
+  if(res.data.errorMessage == null) return false; 
+  if(res.data.errorMessage === 'undefined') return false;
+  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
+      alert("Database is offline (AWS).");
+      return true;
+  }     
+  return false;
+};
+
 //************ API Call Production ************
 
 async function postProductionOrder(body) {
@@ -259,7 +295,32 @@ async function postProductionOrder(body) {
     })
     .catch((error) => {
       console.error(error);
-    }); 
+    });
+}
+
+//************ API Call MaWi ************
+
+async function getOrderAvailability(body) {
+  let parsed;
+  //console.log(body);
+  
+  await axios.get('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/gervorproduktionvv', body)
+    .then((results) => {
+
+      if(IsDataBaseOffline(results)){
+        stored = false;
+        return; //Check if db is available
+      } 
+
+      parsed = JSON.stringify(results.data);
+      //console.log(parsed);
+      res = JSON.parse(parsed);
+      stored = res.stored;
+      return results;
+    })
+    .catch((error) => {
+      console.error(error);
+    });
 }
 
 //******* SQL Statements *******
@@ -297,5 +358,11 @@ const getOrderOrderitem= function (O_NR, OI_NR) {
 const getMaxPO_COUNTER_AND_STATE= function (IR_O_NR, IR_OI_NR) {
   var queryMessage = "SELECT IR_COUNTER, IR_IST_NR FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + " AND IR_COUNTER=(Select max(IR_COUNTER) FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + ");";
   console.log(queryMessage);
+  return (queryMessage);
+};
+
+const updateItemReturnStatus = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_IST_NR) {
+  var queryMessage = "UPDATE `QUALITY`.`ITEMRETURN` SET `IR_IST_NR` = '" + IR_IST_NR + "' WHERE (`IR_O_NR` = '"+ IR_O_NR + "') and (`IR_OI_NR` = '" + IR_OI_NR + "') and (`IR_COUNTER` = '" + IR_COUNTER + "');";
+  //console.log(queryMessage);
   return (queryMessage);
 };

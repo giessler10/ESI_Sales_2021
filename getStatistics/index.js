@@ -26,14 +26,24 @@ exports.handler = async (event, context, callback) => {
     const pool = await mysql.createPool(con);
     
     try {
-      //get all QualityIssues
+      //get KPIs
       await callDBResonse(pool, getDashboardView());
-      results = res;
+      var KPI = res[0];
+      
+      //get ChartData
+      //await callDBResonse(pool, getDashboardView());
+      var chart= "Muss in der View noch ergänzt werden.";
+      
+      var body = {
+        KPIs: KPI,
+        chart: chart
+      };
+      body = JSON.stringify(body);
       //console.log(results);
   
       const response = {
         statusCode: 200,
-        body: results
+        body: body
       };
   
       //console.log(response);

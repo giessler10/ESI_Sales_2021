@@ -13,7 +13,9 @@ var response;
 var body_production = [];
 var body_production_Parsed;
 
-var available;
+var body_mawi;
+var stored;
+
 var new_QI_Counter;
 var orderitem;
 var order;
@@ -81,20 +83,21 @@ exports.handler = async (event, context, callback) => {
           //Status Orderitem ändern
           await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
 
-          //Prüfen, ob Orderitem in MaWi existiert ...
-          available = false;
-          if(available){
-            //API Call MaWi
+          await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
+          orderitem = res[0];
+
+          //Prüfen, ob Orderitem in MaWi existiert
+          body_mawi = buildRequestBodyOrderMaWi(O_NR, "Q", orderitem);
+          await callDBResonse(pool, getOrderAvailability(body_mawi));
+
+          if(stored){
+            //Status QualityIssue aktualisieren
+            await callDBResonse(pool, updateQualityIssueStatus(O_NR, qualityIssueItems[i].QI_OI_NR, qualityIssueItems[i].QI_COUNTER, 5));
+
           }
           //Neue Produktion auslösen
           else{
-            //Orderitem abrufen
-            await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
-            orderitem = res[0];
-            
             order = buildNewOrderObject("Q", new_QI_Counter, orderitem);
-            console.log(order);
-            
             body_production.push(order);
           }
         }
@@ -107,19 +110,21 @@ exports.handler = async (event, context, callback) => {
           //Status Orderitem ändern
           await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
 
-          //Prüfen, ob Orderitem in MaWi existiert ...
-          available = false;
-          if(available){
-            //API Call MaWi
+          await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
+          orderitem = res[0];
+
+          //Prüfen, ob Orderitem in MaWi existiert
+          body_mawi = buildRequestBodyOrderMaWi(O_NR, "Q", orderitem);
+          await callDBResonse(pool, getOrderAvailability(body_mawi));
+
+          if(stored){
+            //Status QualityIssue aktualisieren
+            await callDBResonse(pool, updateQualityIssueStatus(O_NR, qualityIssueItems[i].QI_OI_NR, qualityIssueItems[i].QI_COUNTER, 5));
+
           }
           //Neue Produktion auslösen
           else{
-            //Orderitem abrufen
-            await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
-            orderitem = res[0];
-            
             order = buildNewOrderObject("Q", new_QI_Counter, orderitem);
-            
             body_production.push(order);
           }
         }
@@ -127,7 +132,7 @@ exports.handler = async (event, context, callback) => {
       
       body_production_Parsed = JSON.stringify(body_production);
           
-      //await postProductionOrder(body_production_Parsed);
+      await postProductionOrder(body_production_Parsed);
       //console.log(body_production_Parsed);
  
       var messageJSON = {
@@ -190,6 +195,24 @@ async function callDBResonse(client, queryMessage) {
 }
 
 //************ Hilfsfunktionen ************
+const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
+  var resonse = {
+    body: [
+      {
+        "O_NR": OI_O_NR,
+        "OI_NR": orderitem.OI_NR,
+        "PO_CODE": PO_CODE,
+        "PO_COUNTER": "1",
+        "QUANTITY": orderitem.OI_QTY,
+        "HEXCOLOR": orderitem.HEXCOLOR,
+        "IMAGE": orderitem.IM_FILE
+      }
+    ]
+  };
+  
+  console.log(resonse);
+  return JSON.stringify(resonse);
+};
 
 const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   var customerType;
@@ -216,6 +239,18 @@ const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   return order;
 };
 
+//Check if database is offline (AWS)
+const IsDataBaseOffline = function (res){
+
+  if(res.data.errorMessage == null) return false; 
+  if(res.data.errorMessage === 'undefined') return false;
+  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
+      alert("Database is offline (AWS).");
+      return true;
+  }     
+  return false;
+};
+
 //************ API Call Production ************
 
 async function postProductionOrder(body) {
@@ -235,6 +270,31 @@ async function postProductionOrder(body) {
     .catch((error) => {
       console.error(error);
     }); 
+}
+
+//************ API Call MaWi ************
+
+async function getOrderAvailability(body) {
+  let parsed;
+  //console.log(body);
+  
+  await axios.get('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/gervorproduktionvv', body)
+    .then((results) => {
+
+      if(IsDataBaseOffline(results)){
+        stored = false;
+        return; //Check if db is available
+      } 
+
+      parsed = JSON.stringify(results.data);
+      //console.log(parsed);
+      res = JSON.parse(parsed);
+      stored = res.stored;
+      return results;
+    })
+    .catch((error) => {
+      console.error(error);
+    });
 }
 
 //******* SQL Statements *******
@@ -272,5 +332,11 @@ const getOrderOrderitem= function (O_NR, OI_NR) {
 const getMaxPO_COUNTER_AND_STATE= function (QI_O_NR, QI_OI_NR) {
   var queryMessage = "SELECT QI_COUNTER, QI_IST_NR FROM QUALITY.QUALITYISSUE WHERE QI_O_NR=" + QI_O_NR + " AND QI_OI_NR=" + QI_OI_NR + " AND QI_COUNTER=(Select max(QI_COUNTER) FROM QUALITY.QUALITYISSUE WHERE QI_O_NR=" + QI_O_NR + " AND QI_OI_NR=" + QI_OI_NR + ");";
   console.log(queryMessage);
+  return (queryMessage);
+};
+
+const updateQualityIssueStatus = function (QI_O_NR, QI_OI_NR, QI_COUNTER, QI_IST_NR) {
+  var queryMessage = "UPDATE `QUALITY`.`QUALITYISSUE` SET `QI_IST_NR` = '" + QI_IST_NR + "' WHERE (`QI_O_NR` = '"+ QI_O_NR + "') and (`QI_OI_NR` = '" + QI_OI_NR + "') and (`QI_COUNTER` = '" + QI_COUNTER + "');";
+  //console.log(queryMessage);
   return (queryMessage);
 };

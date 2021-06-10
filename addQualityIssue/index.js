@@ -11,6 +11,12 @@ var res;
 var message;
 var response;
 var body_production = [];
+var body_production_Parsed;
+
+var available;
+var new_QI_Counter;
+var orderitem;
+var order;
 
 //******* DATABASE CONNECTION *******
 
@@ -61,42 +67,68 @@ exports.handler = async (event, context, callback) => {
     else{
       //Status der Order ändern
       //await callDB(pool, updateOrderStatus(O_NR, 5)); //Wird über DB geändert
-
+      
       //Quality Issues anlegen und den Status der Orderitems ändern
       for (var i = 0; i < qualityIssueItems.length; i++) {
+        //Status prüfen
+        await callDBResonse(pool, getMaxPO_COUNTER_AND_STATE(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR));
+        if(res == null){
+          new_QI_Counter = 1;
 
-        //Quality Issue anlegen
-        await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
+          //Quality Issue anlegen
+          await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, new_QI_Counter, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
 
-        //Status Orderitem ändern
-        await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
+          //Status Orderitem ändern
+          await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
 
-        //Prüfen, ob Orderitems in MaWi existieren ...
-        var available = false;
-        if(available){
-          //API Call MaWi
+          //Prüfen, ob Orderitem in MaWi existiert ...
+          available = false;
+          if(available){
+            //API Call MaWi
+          }
+          //Neue Produktion auslösen
+          else{
+            //Orderitem abrufen
+            await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
+            orderitem = res[0];
+            
+            order = buildNewOrderObject("Q", new_QI_Counter, orderitem);
+            console.log(order);
+            
+            body_production.push(order);
+          }
         }
-        //Neue Produktion auslösen
-        else{
+        else if(res[0].QI_IST_NR == 8 || res[0].QI_IST_NR == 10){
+          new_QI_Counter = res[0].QI_COUNTER + 1;
 
-          //Get PO_COUNTER
-          await callDBResonse(pool, getMaxPO_COUNTER(O_NR, qualityIssueItems[i].QI_OI_NR));
-          var PO_COUNTER = res[0].QI_COUNTER;
+          //Quality Issue anlegen
+          await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, new_QI_Counter, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
 
-          //Orderitems abrufen
-          await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
-          var orderitem = res[0];
-          
-          var order = buildNewOrderObject("Q", PO_COUNTER, orderitem);
-          
-          body_production.push(order);
+          //Status Orderitem ändern
+          await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
+
+          //Prüfen, ob Orderitem in MaWi existiert ...
+          available = false;
+          if(available){
+            //API Call MaWi
+          }
+          //Neue Produktion auslösen
+          else{
+            //Orderitem abrufen
+            await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
+            orderitem = res[0];
+            
+            order = buildNewOrderObject("Q", new_QI_Counter, orderitem);
+            
+            body_production.push(order);
+          }
         }
       }
       
-      body_production = JSON.stringify(body_production);
+      body_production_Parsed = JSON.stringify(body_production);
           
-      await postProductionOrder(body_production);
-      //console.log(body_production);
+      //await postProductionOrder(body_production_Parsed);
+      //console.log(body_production_Parsed);
  
       var messageJSON = {
         message: 'Die QS wurde erfasst.'
@@ -194,10 +226,10 @@ async function postProductionOrder(body) {
     .then((results) => {
 
       parsed = JSON.stringify(results.data);
-      console.log(parsed);
+      //console.log(parsed);
       res = JSON.parse(parsed);
       res = res.body;
-      console.log(res);
+      //console.log(res);
       return results;
     })
     .catch((error) => {
@@ -225,8 +257,8 @@ const updateOrderStatus = function (O_NR, O_OST_NR) {
   return (queryMessage);
 };
 
-const insertNewQualityIssue = function (QI_O_NR, QI_OI_NR, QI_IST_NR, QI_QTY, QI_COMMENT) {
-  var queryMessage = "INSERT INTO `QUALITY`.`QUALITYISSUE` (QI_O_NR, QI_OI_NR, QI_IST_NR, QI_QTY, QI_COMMENT) VALUES ('" + QI_O_NR + "', '" + QI_OI_NR + "', '" + QI_IST_NR + "', '" + QI_QTY + "', '" + QI_COMMENT + "');";
+const insertNewQualityIssue = function (QI_O_NR, QI_OI_NR, QI_COUNTER, QI_IST_NR, QI_QTY, QI_COMMENT) {
+  var queryMessage = "INSERT INTO `QUALITY`.`QUALITYISSUE` (QI_O_NR, QI_OI_NR, QI_COUNTER, QI_IST_NR, QI_QTY, QI_COMMENT) VALUES ('" + QI_O_NR + "', '" + QI_OI_NR + "', '" + QI_COUNTER + "', '" + QI_IST_NR + "', '" + QI_QTY + "', '" + QI_COMMENT + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
@@ -237,8 +269,8 @@ const getOrderOrderitem= function (O_NR, OI_NR) {
   return (queryMessage);
 };
 
-const getMaxPO_COUNTER= function (O_NR, OI_NR) {
-  var queryMessage = "SELECT max(QI_COUNTER) as QI_COUNTER FROM QUALITY.QUALITYISSUE WHERE QI_O_NR=" + O_NR + " AND QI_OI_NR=" + OI_NR + ";";
-  //console.log(queryMessage);
+const getMaxPO_COUNTER_AND_STATE= function (QI_O_NR, QI_OI_NR) {
+  var queryMessage = "SELECT QI_COUNTER, QI_IST_NR FROM QUALITY.QUALITYISSUE WHERE QI_O_NR=" + QI_O_NR + " AND QI_OI_NR=" + QI_OI_NR + " AND QI_COUNTER=(Select max(QI_COUNTER) FROM QUALITY.QUALITYISSUE WHERE QI_O_NR=" + QI_O_NR + " AND QI_OI_NR=" + QI_OI_NR + ");";
+  console.log(queryMessage);
   return (queryMessage);
 };

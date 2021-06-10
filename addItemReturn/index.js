@@ -10,6 +10,13 @@ var res;
 var message;
 var response;
 var body_production = [];
+var body_production_Parsed;
+
+var available;
+var new_IR_Counter;
+var orderitem;
+var order;
+
 var sendNewProduction = false;
 
 //******* DATABASE CONNECTION *******
@@ -62,53 +69,90 @@ exports.handler = async (event, context, callback) => {
       //Status der Order ändern
       //await callDB(pool, updateOrderStatus(O_NR, 5));   //Änderung durch DB
 
-      //Item Return Issues anlegen und den Status der Orderitems ändern
+      //Item Return Issue anlegen und den Status des Orderitem ändern
       for (var i = 0; i < itemReturnItems.length; i++) {
+        //Status prüfen
+        await callDBResonse(pool, getMaxPO_COUNTER_AND_STATE(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR));
+        if(res == null){
+          new_IR_Counter = 1;
 
-        //Item Return anlegen
-        await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, itemReturnItems[i].IR_IST_NR, itemReturnItems[i].IR_REPRODUCE));
+          //Item Return anlegen
+          await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, new_IR_Counter, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, 1, itemReturnItems[i].IR_REPRODUCE));
 
-        //Status Orderitem ändern
-        if(itemReturnItems[i].IR_RT_NR == 1){
-          await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
-        }
-        else{
-          await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
-        }
-
-        //Wenn Neuproduktion gewünscht ist ...
-        if(itemReturnItems[i].NewProduction == 1){
-          sendNewProduction = true;
-
-          //Prüfen, ob Orderitems in MaWi existieren ...
-
-          var available = false;
-          if(available){
-            //API Call MaWi
+          //Status Orderitem ändern
+          if(itemReturnItems[i].IR_RT_NR == 1){
+            await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
           }
-          //Neue Produktion auslösen
           else{
-            //Get PO_COUNTER
-            await callDBResonse(pool, getMaxPO_COUNTER(O_NR, itemReturnItems[i].QI_OI_NR));
-            var PO_COUNTER = res[0].IR_COUNTER;
+            await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
+          }
 
-            //Orderitems abrufen
-            await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].QI_OI_NR));
-            var orderitem = res[0];
-            
-            var order = buildNewOrderObject("R", PO_COUNTER, orderitem);
-            
-            body_production.push(order);
+          //Wenn Neuproduktion gewünscht ist ...
+          if(itemReturnItems[i].NewProduction == 1){
+            sendNewProduction = true;
+
+            //Prüfen, ob Orderitems in MaWi existieren ...
+
+            var available = false;
+            if(available){
+              //API Call MaWi
+            }
+            //Neue Produktion auslösen
+            else{
+              //Orderitems abrufen
+              await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].QI_OI_NR));
+              orderitem = res[0];
+              
+              order = buildNewOrderObject("R", new_IR_Counter, orderitem);
+              
+              body_production.push(order);
+            }
+          }
+        }
+        else if(res[0].IR_IST_NR == 8 || res[0].IR_IST_NR == 10){
+          new_IR_Counter = res[0].IR_COUNTER + 1;
+
+          //Item Return anlegen
+          await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, new_IR_Counter, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, 1, itemReturnItems[i].IR_REPRODUCE));
+
+          //Status Orderitem ändern
+          if(itemReturnItems[i].IR_RT_NR == 1){
+            await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
+          }
+          else{
+            await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
+          }
+
+          //Wenn Neuproduktion gewünscht ist ...
+          if(itemReturnItems[i].NewProduction == 1){
+            sendNewProduction = true;
+
+            //Prüfen, ob Orderitems in MaWi existieren ...
+
+            var available = false;
+            if(available){
+              //API Call MaWi
+            }
+            //Neue Produktion auslösen
+            else{
+              //Orderitems abrufen
+              await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].QI_OI_NR));
+              orderitem = res[0];
+              
+              order = buildNewOrderObject("R", new_IR_Counter, orderitem);
+              
+              body_production.push(order);
+            }
           }
         }
       }
 
       if(sendNewProduction){
 
-        body_production = JSON.stringify(body_production);
+        body_production_Parsed = JSON.stringify(body_production);
             
-        await postProductionOrder(body_production);
-        //console.log(body_production);
+        await postProductionOrder(body_production_Parsed);
+        //console.log(body_production_Parsed);
       }
  
       var messageJSON = {
@@ -238,8 +282,8 @@ const updateOrderStatus = function (O_NR, O_OST_NR) {
   return (queryMessage);
 };
 
-const insertNewItemReturn = function (IR_O_NR, IR_OI_NR, IR_RT_NR, IR_QTY, IR_COMMENT, IR_IST_NR, IR_REPRODUCE) {
-  var queryMessage = "INSERT INTO `QUALITY`.`ITEMRETURN` (`IR_O_NR`, `IR_OI_NR`, `IR_RT_NR`, `IR_QTY`, `IR_COMMENT`, `IR_IST_NR`, `IR_REPRODUCE`) VALUES ('" + IR_O_NR + "', '" + IR_OI_NR + "', '" + IR_RT_NR + "', '" + IR_QTY + "', '" + IR_COMMENT + "', '" + IR_IST_NR + "', '" + IR_REPRODUCE + "');";
+const insertNewItemReturn = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_RT_NR, IR_QTY, IR_COMMENT, IR_IST_NR, IR_REPRODUCE) {
+  var queryMessage = "INSERT INTO `QUALITY`.`ITEMRETURN` (`IR_O_NR`, `IR_OI_NR`, `IR_COUNTER`, `IR_RT_NR`, `IR_QTY`, `IR_COMMENT`, `IR_IST_NR`, `IR_REPRODUCE`) VALUES ('" + IR_O_NR + "', '" + IR_OI_NR + "', '" + IR_COUNTER + "', '" + IR_RT_NR + "', '" + IR_QTY + "', '" + IR_COMMENT + "', '" + IR_IST_NR + "', '" + IR_REPRODUCE + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
@@ -250,8 +294,8 @@ const getOrderOrderitem= function (O_NR, OI_NR) {
   return (queryMessage);
 };
 
-const getMaxPO_COUNTER= function (O_NR, OI_NR) {
-  var queryMessage = "SELECT max(IR_COUNTER) as IR_COUNTER FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + O_NR + " AND IR_OI_NR=" + OI_NR + ";";
-  //console.log(queryMessage);
+const getMaxPO_COUNTER_AND_STATE= function (IR_O_NR, IR_OI_NR) {
+  var queryMessage = "SELECT IR_COUNTER, IR_IST_NR FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + " AND IR_COUNTER=(Select max(IR_COUNTER) FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + ");";
+  console.log(queryMessage);
   return (queryMessage);
 };

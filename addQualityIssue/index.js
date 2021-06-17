@@ -15,7 +15,7 @@ var body_production_Parsed;
 
 var body_mawi;
 var orderitemMaWi = [];
-var stored;
+var stored = false;
 
 var new_QI_Counter;
 var orderitem;
@@ -36,7 +36,7 @@ exports.handler = async (event, context, callback) => {
   const pool = await mysql.createPool(con);
 
   // get event data
-  let O_NR = event.O_NR;  //Ordernummer
+  let O_NR = event.O_NR;                //Ordernummer
   let qualityIssueItems = event.body;
 
   //Fehler schmeißen wenn Body kein Array ist.
@@ -80,26 +80,38 @@ exports.handler = async (event, context, callback) => {
 
           //Quality Issue anlegen
           await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, new_QI_Counter, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
-
+          
+          //Sleep
+          await sleep(100);
+          
           //Status Orderitem ändern
           await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
 
           await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
           orderitem = res[0];
+          orderitem.OI_QTY = qualityIssueItems[i].QI_QTY;
+          
+          //Sleep
+          await sleep(100);
 
           //Prüfen, ob Orderitem in MaWi existiert
           body_mawi = buildRequestBodyOrderMaWi(O_NR, "Q", orderitem);
           await putOrderAvailability(body_mawi);
 
+          //Sleep
+          await sleep(300);
+
           if(stored){
             //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
-            orderitemMaWi.push(orderitems[i]);
+            var currentQualityIssue = qualityIssueItems[i];
+            currentQualityIssue.QI_COUNTER = new_QI_Counter;
+            orderitemMaWi.push(qualityIssueItems[i]);
 
             //await callDBResonse(pool, updateQualityIssueStatus(O_NR, qualityIssueItems[i].QI_OI_NR, qualityIssueItems[i].QI_COUNTER, 5));
 
           }
           //Neue Produktion auslösen
-          else{
+          else{  
             order = buildNewOrderObject("Q", new_QI_Counter, orderitem);
             body_production.push(order);
           }
@@ -109,40 +121,59 @@ exports.handler = async (event, context, callback) => {
 
           //Quality Issue anlegen
           await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, new_QI_Counter, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
-
+          
+          //Sleep
+          await sleep(100);
+          
           //Status Orderitem ändern
           await callDB(pool, updateOrderitemStatus(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, 12));
 
           await callDBResonse(pool, getOrderOrderitem(O_NR, qualityIssueItems[i].QI_OI_NR));
           orderitem = res[0];
+          orderitem.OI_QTY = qualityIssueItems[i].QI_QTY;
+          
+          //Sleep
+          await sleep(100);
 
           //Prüfen, ob Orderitem in MaWi existiert
           body_mawi = buildRequestBodyOrderMaWi(O_NR, "Q", orderitem);
+          console.log(body_mawi);
           await putOrderAvailability(body_mawi);
+
+          //Sleep
+          await sleep(100);
 
           if(stored){
             //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
-            orderitemMaWi.push(orderitems[i]);
+            var currentQualityIssue = qualityIssueItems[i];
+            currentQualityIssue.QI_COUNTER = new_QI_Counter;
+            orderitemMaWi.push(qualityIssueItems[i]);
 
             //await callDBResonse(pool, updateQualityIssueStatus(O_NR, qualityIssueItems[i].QI_OI_NR, qualityIssueItems[i].QI_COUNTER, 5));
 
           }
           //Neue Produktion auslösen
-          else{
+          else{           
             order = buildNewOrderObject("Q", new_QI_Counter, orderitem);
             body_production.push(order);
           }
         }
       }
       
+      console.log("Prod: " + JSON.stringify(body_production));
+      console.log("Mawi: " + JSON.stringify(orderitemMaWi));
+      
       body_production_Parsed = JSON.stringify(body_production);
           
       await postProductionOrder(body_production_Parsed);
       //console.log(body_production_Parsed);
+      
+      //Sleep
+      await sleep(100);
 
       //Orderitems die verfügbar waren aktualisieren
       for (var i = 0; i < orderitemMaWi.length; i++) {
-        await callDBResonse(pool, updateQualityIssueStatus(O_NR, orderitemMaWi[i].QI_OI_NR, orderitemMaWi[i].QI_COUNTER, 5));
+        await callDBResonse(pool, updateQualityIssueStatus(O_NR, orderitemMaWi[i].QI_OI_NR, orderitemMaWi[i].QI_COUNTER, 6));
       }
       
       var messageJSON = {
@@ -263,6 +294,12 @@ const IsDataBaseOffline = function (res){
   return false;
 };
 
+const sleep = ms => {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+};
+
 //************ API Call Production ************
 
 async function postProductionOrder(body) {
@@ -273,6 +310,15 @@ async function postProductionOrder(body) {
     .then((results) => {
       
       if(IsDataBaseOffline(results)){
+         response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+        
         return; //Check if db is available
       }
 
@@ -296,7 +342,17 @@ async function putOrderAvailability(body) {
     .then((results) => {
       
       if(IsDataBaseOffline(results)){
-        stored = false;
+        stored=false;
+
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+        
         return; //Check if db is available
       }
 
@@ -351,6 +407,6 @@ const getMaxPO_COUNTER_AND_STATE= function (QI_O_NR, QI_OI_NR) {
 
 const updateQualityIssueStatus = function (QI_O_NR, QI_OI_NR, QI_COUNTER, QI_IST_NR) {
   var queryMessage = "UPDATE `QUALITY`.`QUALITYISSUE` SET `QI_IST_NR` = '" + QI_IST_NR + "' WHERE (`QI_O_NR` = '"+ QI_O_NR + "') and (`QI_OI_NR` = '" + QI_OI_NR + "') and (`QI_COUNTER` = '" + QI_COUNTER + "');";
-  //console.log(queryMessage);
+  console.log(queryMessage);
   return (queryMessage);
 };

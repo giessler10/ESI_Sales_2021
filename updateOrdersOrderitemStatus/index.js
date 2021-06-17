@@ -201,7 +201,7 @@ function buildSQLString(orders, IST_NR) {
         whereQS = "where (QI_O_NR = " + orders[i]["O_NR"] + " and QI_OI_NR = " + orders[i]["OI_NR"] + " and QI_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
       } 
       else{
-       whereQS += " or (QI_O_NR = " + orders[i]["O_NR"] + " and QI_OI_NR = " + orders[i]["OI_NR"] + " and QI_COUNTER = '" + orders[i]["PO_COUNTER"] + ")";
+       whereQS += " or (QI_O_NR = " + orders[i]["O_NR"] + " and QI_OI_NR = " + orders[i]["OI_NR"] + " and QI_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
       }
     } 
     
@@ -211,7 +211,7 @@ function buildSQLString(orders, IST_NR) {
         whereReturn = "where (IR_O_NR = " + orders[i]["O_NR"] + " and IR_OI_NR = " + orders[i]["OI_NR"] + " and IR_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
       } 
       else{
-        whereReturn += " or (IR_O_NR = " + orders[i]["O_NR"] + " and IR_OI_NR = " + orders[i]["OI_NR"] + " and IR_COUNTER = '" + orders[i]["PO_COUNTER"] + ")";
+        whereReturn += " or (IR_O_NR = " + orders[i]["O_NR"] + " and IR_OI_NR = " + orders[i]["OI_NR"] + " and IR_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
       }
     } 
   }

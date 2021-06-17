@@ -27,12 +27,12 @@ exports.handler = async (event, context, callback) => {
     
     try {
       //get KPIs
-      await callDBResonse(pool, getDashboardView());
+      await callDBResonse(pool, getDashboardKPI());
       var KPI = res[0];
       
       //get ChartData
-      //await callDBResonse(pool, getDashboardView());
-      var chart= "Muss in der View noch ergänzt werden.";
+      await callDBResonse(pool, getDashboardChartData());
+      var chart= res;
       
       var body = {
         KPIs: KPI,
@@ -98,8 +98,14 @@ async function callDBResonse(client, queryMessage) {
 
 //******* SQL Statements *******
 
-const getDashboardView = function() {
+const getDashboardKPI = function() {
     var queryMessage = "SELECT * FROM VIEWS.DASHBOARD;";
     //console.log(queryMessage)
     return (queryMessage);
+};
+
+const getDashboardChartData = function() {
+  var queryMessage = "SELECT * FROM VIEWS.ORDERFLOW;";
+  //console.log(queryMessage)
+  return (queryMessage);
 };

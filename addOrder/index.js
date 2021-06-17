@@ -14,7 +14,7 @@ var body_production;
 var orderitemProduce = [];
 var body_mawi;
 var orderitemMaWi = [];
-var stored;
+var stored = false;
 
 var OI_O_NR; //Bestellnummer
 var C_CT_ID; //Kundentyp
@@ -38,8 +38,7 @@ exports.handler = async (event, context, callback) => {
 
   // get event data
   let O_C_NR = event.C_NR;        //Kundennummer
-  //let O_OT_NR = event.O_OT_NR;    //Bestelltyp 1=internal | 2=external
-  let draft = event.draft;
+  let draft = event.draft;        //Entwurf
   let orderitems = event.orderitems;
 
   try{
@@ -71,6 +70,9 @@ exports.handler = async (event, context, callback) => {
         
         body_production = buildRequestBodyNewPreOrder(0, "B2B", O_TIMESTAMP, PO_CODE, orderitems, orderitemIndex);
         await postProductionOrder(body_production);
+        
+        //Sleep
+        await sleep(100);
 
         //Orderitems anlegen
         for (var i = 0; i < orderitems.length; i++) {
@@ -111,6 +113,9 @@ exports.handler = async (event, context, callback) => {
             
             await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
             
+            //Sleep
+            await sleep(100);
+
             //Bild anlegen
             await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
           }
@@ -129,9 +134,15 @@ exports.handler = async (event, context, callback) => {
 
             await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
             
+            //Sleep
+            await sleep(100);
+
             //Bild anlegen
             await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
           }
+          
+          //Sleep
+          await sleep(100);
 
           //Prüfen, ob Orderitems in MaWi existieren *************************************
           for (var i = 0; i < orderitems.length; i++) {
@@ -146,11 +157,17 @@ exports.handler = async (event, context, callback) => {
               //Zu den zu produzierenden Orderitems für die Produktion hinzufügen
               orderitemProduce.push(orderitems[i]);
             }
+            
+            //Sleep
+            await sleep(100);
           }
+          
           
           //Aufträge bei der Produktion anlegen ******************************************
           if(orderitemProduce.length != 0){
             //Neue Bestellnummer abfragen
+            //Sleep
+            await sleep(100);
 
             await callDBResonse(pool, detectBusiness(O_C_NR));
             C_CT_ID = res[0].C_CT_ID;
@@ -160,9 +177,13 @@ exports.handler = async (event, context, callback) => {
             O_TIMESTAMP = res[0].O_TIMESTAMP;
             
             body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitemProduce);
+            console.log(body_production);
             await postProductionOrder(body_production);
             
           }
+          
+          //Sleep
+          await sleep(100);
 
           //Wenn DB bei Produktion und MaWi online ist und der Auftrag übermittelt wurde ***********************************************
 
@@ -174,6 +195,9 @@ exports.handler = async (event, context, callback) => {
             await callDB(pool, updateOrderitemStatus(OI_O_NR, orderitemMaWi[i].OI_NR, 5));
           }
         }
+        
+        //Sleep
+        await sleep(100);
 
         //Neue Bestellnummer abfragen
         await callDBResonse(pool, getNewOrderID());
@@ -329,10 +353,15 @@ const IsDataBaseOffline = function (res){
   if(res.data.errorMessage == null) return false; 
   if(res.data.errorMessage === 'undefined') return false;
   if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
-      alert("Database is offline (AWS).");
-      return true;
+    return true;
   }     
   return false;
+};
+
+const sleep = ms => {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
 };
 
 //************ API Call Production ************
@@ -345,6 +374,15 @@ async function postProductionOrder(body) {
     .then((results) => {
 
       if(IsDataBaseOffline(results)){
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+        
         return; //Check if db is available
       }
 
@@ -370,6 +408,16 @@ async function putOrderAvailability(body) {
       
       if(IsDataBaseOffline(results)){
         stored = false;
+        
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+
         return; //Check if db is available
       }
 

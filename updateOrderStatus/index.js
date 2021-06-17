@@ -76,6 +76,9 @@ exports.handler = async (event, context, callback) => {
           var O_TIMESTAMP = res[0].O_TIMESTAMP;
           var O_OT_NR = res[0].O_OT_NR;
           var C_CT_ID = res[0].C_CT_ID;
+
+          //Sleep
+          await sleep(100);
           
           //Orderitems abrufen
           await callDBResonse(pool, getOrderOrderitems(O_NR));
@@ -83,8 +86,14 @@ exports.handler = async (event, context, callback) => {
 
           //Prüfen, ob Orderitems in MaWi existieren *************************************
           for (var i = 0; i < orderitems.length; i++) {
+            //Sleep
+            await sleep(100);
+
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "N", orderitems[i]);
             await putOrderAvailability(body_mawi);
+            
+            //Sleep
+            await sleep(200);
 
             if(stored){
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
@@ -97,11 +106,17 @@ exports.handler = async (event, context, callback) => {
           }
 
           if(orderitemProduce.length != 0){
+            //Sleep
+            await sleep(100);
+
             body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitemProduce);
             
             await postProductionOrder(body_production);
             //console.log(body_production);
           }
+
+          //Sleep
+          await sleep(100);
 
           //Order aktualisieren
           await callDB(pool, updateOrderStatus(O_NR,OST_NR));
@@ -252,11 +267,17 @@ const IsDataBaseOffline = function (res){
   if(res.data.errorMessage == null) return false; 
   if(res.data.errorMessage === 'undefined') return false;
   if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
-      alert("Database is offline (AWS).");
       return true;
   }     
   return false;
 };
+
+const sleep = ms => {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+};
+
 
 //************ API Call Production ************
 
@@ -267,7 +288,16 @@ async function postProductionOrder(body) {
   await axios.post('https://1ygz8xt0rc.execute-api.eu-central-1.amazonaws.com/main/createorder', body)
     .then((results) => {
       
-      if(IsDataBaseOffline(results)){
+      if(IsDataBaseOffline(results)){  
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+
         return; //Check if db is available
       }
 
@@ -292,6 +322,16 @@ async function putOrderAvailability(body) {
       
       if(IsDataBaseOffline(results)){
         stored = false;
+        
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+
         return; //Check if db is available
       }
 

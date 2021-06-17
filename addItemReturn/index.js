@@ -12,9 +12,9 @@ var response;
 var body_production = [];
 var body_production_Parsed;
 
-var body_mawi;
+var body_mawi = [];
 var orderitemMaWi = [];
-var stored;
+var stored = false;
 
 var new_IR_Counter;
 var orderitem;
@@ -37,8 +37,9 @@ exports.handler = async (event, context, callback) => {
   const pool = await mysql.createPool(con);
 
   // get event data
-  let O_NR = event.O_NR;  //Ordernummer
+  let O_NR = event.O_NR;              //Ordernummer
   let itemReturnItems = event.body;
+  console.log(itemReturnItems);
 
   //Fehler schmeißen wenn Body kein Array ist.
   if (!Array.isArray(itemReturnItems)) {
@@ -82,35 +83,62 @@ exports.handler = async (event, context, callback) => {
           //Item Return anlegen
           await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, new_IR_Counter, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, 1, itemReturnItems[i].IR_REPRODUCE));
 
+          //Sleep
+          await sleep(100);
+
           //Status Orderitem ändern
           if(itemReturnItems[i].IR_RT_NR == 1){
-            await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
+            if(itemReturnItems[i].IR_REPRODUCE == 1){
+              await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
+            }
+            else{
+              await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 10));
+            }
           }
           else{
-            await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
+            if(itemReturnItems[i].IR_REPRODUCE == 1){
+              await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
+            }
+            else{
+              await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 10));
+            }
           }
 
           //Wenn Neuproduktion gewünscht ist ...
-          if(itemReturnItems[i].NewProduction == 1){
+          if(itemReturnItems[i].IR_REPRODUCE == "1"){
+            console.log("Neuproduktion gewünscht");
             sendNewProduction = true;
 
             //Orderitem abrufen
             await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].IR_OI_NR));
             orderitem = res[0];
+            orderitem.OI_QTY = itemReturnItems[i].IR_QTY;
+
+            //Sleep
+            await sleep(100);
 
             //Prüfen, ob Orderitem in MaWi existiert
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
             await putOrderAvailability(body_mawi);
 
+            //Sleep
+            await sleep(100);
+            
+            console.log(typeof(stored));
+            console.log(stored);
+
             if(stored){
+              //console.log("Insert Mawi");
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
-              orderitemMaWi.push(orderitems[i]);
+              var currentItemReturn = itemReturnItems[i];
+              currentItemReturn.IR_COUNTER = new_IR_Counter;
+              orderitemMaWi.push(currentItemReturn);
 
               //await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
-
             }
             //Neue Produktion auslösen
             else{
+              //console.log("Insert Production");
               order = buildNewOrderObject("R", new_IR_Counter, orderitem);
               body_production.push(order);
             }
@@ -122,6 +150,9 @@ exports.handler = async (event, context, callback) => {
           //Item Return anlegen
           await callDB(pool, insertNewItemReturn(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, new_IR_Counter, itemReturnItems[i].IR_RT_NR, itemReturnItems[i].IR_QTY, itemReturnItems[i].IR_COMMENT, 1, itemReturnItems[i].IR_REPRODUCE));
 
+          //Sleep
+          await sleep(100);
+
           //Status Orderitem ändern
           if(itemReturnItems[i].IR_RT_NR == 1){
             await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
@@ -131,22 +162,28 @@ exports.handler = async (event, context, callback) => {
           }
 
           //Wenn Neuproduktion gewünscht ist ...
-          if(itemReturnItems[i].NewProduction == 1){
+          if(itemReturnItems[i].IR_REPRODUCE == 1){
+            console.log("Neue Produktion");
             sendNewProduction = true;
 
             await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].IR_OI_NR));
             orderitem = res[0];
+            orderitem.OI_QTY = itemReturnItems[i].IR_QTY;
 
             //Prüfen, ob Orderitem in MaWi existiert
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
             await putOrderAvailability(body_mawi);
 
+            //Sleep
+            await sleep(100);
+
             if(stored){
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
-              orderitemMaWi.push(orderitems[i]);
+              var currentItemReturn = itemReturnItems[i];
+              currentItemReturn.IR_COUNTER = new_IR_Counter;
+              orderitemMaWi.push(currentItemReturn);
 
               //await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
-
             }
             //Neue Produktion auslösen
             else{
@@ -158,16 +195,19 @@ exports.handler = async (event, context, callback) => {
       }
 
       if(sendNewProduction){
-
+        
         body_production_Parsed = JSON.stringify(body_production);
             
         await postProductionOrder(body_production_Parsed);
         //console.log(body_production_Parsed);
+
+        //Sleep
+        await sleep(100);
       }
 
       //Orderitems die verfügbar waren aktualisieren
       for (var i = 0; i < orderitemMaWi.length; i++) {
-        await callDB(pool, updateOrderitemStatus(O_NR, orderitemMaWi[i].OI_NR, 5));
+        await callDB(pool, updateItemReturnStatus(O_NR, orderitemMaWi[i].OI_NR, orderitemMaWi.IR_COUNTER, 6));
       }
 
       var messageJSON = {
@@ -289,6 +329,12 @@ const IsDataBaseOffline = function (res){
   return false;
 };
 
+const sleep = ms => {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+};
+
 //************ API Call Production ************
 
 async function postProductionOrder(body) {
@@ -299,6 +345,15 @@ async function postProductionOrder(body) {
     .then((results) => {
       
       if(IsDataBaseOffline(results)){
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+        
         return; //Check if db is available
       }
 
@@ -322,7 +377,17 @@ async function putOrderAvailability(body) {
     .then((results) => {
       
       if(IsDataBaseOffline(results)){
-        stored = false;
+        stored=false;
+
+        response = {
+          statusCode: 500,
+          errorMessage: "Internal Server Error",
+          errorType: "Internal Server Error"
+        };
+      
+        //Fehler schmeisen
+        context.fail(JSON.stringify(response));
+        
         return; //Check if db is available
       }
 
@@ -341,7 +406,7 @@ async function putOrderAvailability(body) {
 
 const updateOrderitemStatus = function (O_NR, OI_NR, IST_NR) {
   var queryMessage = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " WHERE OI_O_NR = " + O_NR + " AND OI_NR = " + OI_NR + ";";
-  //console.log(queryMessage);
+  console.log(queryMessage);
   return (queryMessage);
 };
 
@@ -377,6 +442,6 @@ const getMaxPO_COUNTER_AND_STATE= function (IR_O_NR, IR_OI_NR) {
 
 const updateItemReturnStatus = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_IST_NR) {
   var queryMessage = "UPDATE `QUALITY`.`ITEMRETURN` SET `IR_IST_NR` = '" + IR_IST_NR + "' WHERE (`IR_O_NR` = '"+ IR_O_NR + "') and (`IR_OI_NR` = '" + IR_OI_NR + "') and (`IR_COUNTER` = '" + IR_COUNTER + "');";
-  //console.log(queryMessage);
+  console.log(queryMessage);
   return (queryMessage);
 };

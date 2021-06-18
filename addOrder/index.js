@@ -57,6 +57,9 @@ exports.handler = async (event, context, callback) => {
       context.fail(JSON.stringify(response));
     }
     else{
+      orderitemProduce = [];
+      orderitemMaWi = [];
+
       //Vorproduktion
       if(O_C_NR == 0){
         PO_CODE="P";  //P=Preprocessing
@@ -120,7 +123,6 @@ exports.handler = async (event, context, callback) => {
             await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
           }
         }
-        
         //Bestellung direkt an Produktion weiterleiten
         else{
           await callDB(pool, insertNewOrder(O_C_NR, 9));
@@ -146,6 +148,8 @@ exports.handler = async (event, context, callback) => {
 
           //Prüfen, ob Orderitems in MaWi existieren *************************************
           for (var i = 0; i < orderitems.length; i++) {
+            stored = false;
+
             body_mawi = buildRequestBodyOrderMaWi(OI_O_NR, PO_CODE, orderitems[i]);
             await putOrderAvailability(body_mawi);
 
@@ -159,7 +163,7 @@ exports.handler = async (event, context, callback) => {
             }
             
             //Sleep
-            await sleep(100);
+            await sleep(300);
           }
           
           

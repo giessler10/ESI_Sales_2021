@@ -70,11 +70,14 @@ exports.handler = async (event, context, callback) => {
     else{
       //Status der Order ändern
       //await callDB(pool, updateOrderStatus(O_NR, 5)); //Wird über DB geändert
+      body_production = [];
+      orderitemMaWi = [];
       
       //Quality Issues anlegen und den Status der Orderitems ändern
       for (var i = 0; i < qualityIssueItems.length; i++) {
         //Status prüfen
         await callDBResonse(pool, getMaxPO_COUNTER_AND_STATE(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR));
+        console.log(res);
         if(res == null){
           new_QI_Counter = 1;
 
@@ -93,6 +96,7 @@ exports.handler = async (event, context, callback) => {
           
           //Sleep
           await sleep(100);
+          stored = false;
 
           //Prüfen, ob Orderitem in MaWi existiert
           body_mawi = buildRequestBodyOrderMaWi(O_NR, "Q", orderitem);
@@ -116,8 +120,9 @@ exports.handler = async (event, context, callback) => {
             body_production.push(order);
           }
         }
-        else if(res[0].QI_IST_NR == 8 || res[0].QI_IST_NR == 10){
+        else if(res[0].QI_IST_NR == 6 || res[0].QI_IST_NR == 8 || res[0].QI_IST_NR == 10 || res[0].QI_IST_NR == 12){
           new_QI_Counter = res[0].QI_COUNTER + 1;
+          console.log(new_QI_Counter);
 
           //Quality Issue anlegen
           await callDB(pool, insertNewQualityIssue(qualityIssueItems[i].QI_O_NR, qualityIssueItems[i].QI_OI_NR, new_QI_Counter, 1, qualityIssueItems[i].QI_QTY, qualityIssueItems[i].QI_COMMENT));
@@ -134,14 +139,19 @@ exports.handler = async (event, context, callback) => {
           
           //Sleep
           await sleep(100);
+          
+          stored = false;
 
           //Prüfen, ob Orderitem in MaWi existiert
           body_mawi = buildRequestBodyOrderMaWi(O_NR, "Q", orderitem);
-          console.log(body_mawi);
+          //console.log(body_mawi);
           await putOrderAvailability(body_mawi);
 
           //Sleep
-          await sleep(100);
+          await sleep(300);
+          
+          console.log("Stored:");
+          console.log(stored);
 
           if(stored){
             //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
@@ -253,7 +263,7 @@ const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
     body: body
   };
   
-  console.log(resonse);
+  //console.log(resonse);
   return JSON.stringify(resonse);
 };
 
@@ -371,7 +381,7 @@ async function putOrderAvailability(body) {
 
 const updateOrderitemStatus = function (O_NR, OI_NR, IST_NR) {
   var queryMessage = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " WHERE OI_O_NR = " + O_NR + " AND OI_NR = " + OI_NR + ";";
-  //console.log(queryMessage);
+  console.log(queryMessage);
   return (queryMessage);
 };
 

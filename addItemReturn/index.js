@@ -72,6 +72,9 @@ exports.handler = async (event, context, callback) => {
     else{
       //Status der Order ändern
       //await callDB(pool, updateOrderStatus(O_NR, 5));   //Änderung durch DB
+      
+      body_production = [];
+      orderitemMaWi = [];
 
       //Item Return Issue anlegen und den Status des Orderitem ändern
       for (var i = 0; i < itemReturnItems.length; i++) {
@@ -116,15 +119,17 @@ exports.handler = async (event, context, callback) => {
 
             //Sleep
             await sleep(100);
+            
+            stored = false;
 
             //Prüfen, ob Orderitem in MaWi existiert
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
             await putOrderAvailability(body_mawi);
 
             //Sleep
-            await sleep(100);
+            await sleep(300);
             
-            console.log(typeof(stored));
+            console.log("Stored:");
             console.log(stored);
 
             if(stored){
@@ -169,13 +174,18 @@ exports.handler = async (event, context, callback) => {
             await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].IR_OI_NR));
             orderitem = res[0];
             orderitem.OI_QTY = itemReturnItems[i].IR_QTY;
+            
+            stored = false;
 
             //Prüfen, ob Orderitem in MaWi existiert
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "R", orderitem);
             await putOrderAvailability(body_mawi);
 
             //Sleep
-            await sleep(100);
+            await sleep(300);
+            
+            console.log("Stored:");
+            console.log(stored);
 
             if(stored){
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
@@ -207,7 +217,7 @@ exports.handler = async (event, context, callback) => {
 
       //Orderitems die verfügbar waren aktualisieren
       for (var i = 0; i < orderitemMaWi.length; i++) {
-        await callDB(pool, updateItemReturnStatus(O_NR, orderitemMaWi[i].OI_NR, orderitemMaWi.IR_COUNTER, 6));
+        await callDB(pool, updateItemReturnStatus(O_NR, orderitemMaWi[i].IR_OI_NR, orderitemMaWi[i].IR_COUNTER, 6));
       }
 
       var messageJSON = {
@@ -430,13 +440,13 @@ const insertNewItemReturn = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_RT_NR, I
 
 const getOrderOrderitem= function (O_NR, OI_NR) {
   var queryMessage = "SELECT O_NR, OI_NR, OI_QTY, C_CT_ID, O_TIMESTAMP, IM_FILE, OI_HEXCOLOR FROM VIEWS.FULLORDER WHERE O_NR = "+ O_NR + " AND OI_NR=" + OI_NR + ";";
-  console.log(queryMessage);
+  //console.log(queryMessage);
   return (queryMessage);
 };
 
 const getMaxPO_COUNTER_AND_STATE= function (IR_O_NR, IR_OI_NR) {
   var queryMessage = "SELECT IR_COUNTER, IR_IST_NR FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + " AND IR_COUNTER=(Select max(IR_COUNTER) FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + ");";
-  console.log(queryMessage);
+  //console.log(queryMessage);
   return (queryMessage);
 };
 

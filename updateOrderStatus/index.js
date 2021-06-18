@@ -67,6 +67,9 @@ exports.handler = async (event, context, callback) => {
         context.fail(JSON.stringify(response));
       }
       else{
+
+        orderitemProduce = [];
+        orderitemMaWi = [];
         
         if(OST_NR == 1){
           //Aufträge bei der Produktion anlegen ******************************************
@@ -88,12 +91,13 @@ exports.handler = async (event, context, callback) => {
           for (var i = 0; i < orderitems.length; i++) {
             //Sleep
             await sleep(100);
+            stored = false;
 
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "N", orderitems[i]);
             await putOrderAvailability(body_mawi);
             
             //Sleep
-            await sleep(200);
+            await sleep(300);
 
             if(stored){
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen

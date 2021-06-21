@@ -65,7 +65,10 @@ exports.handler = async (event, context, callback) => {
         PO_CODE="P";  //P=Preprocessing
 
         //Aktuelles Datum
-        O_TIMESTAMP = new Date().getTime();
+        const date = new Date();
+        const inc = (1000 * 60 * 60) * 2; // an hour
+        const _date = new Date(date);
+        O_TIMESTAMP = new Date(_date.getTime() + inc).toISOString().slice(0, 19).replace('T', ' ');
         
         //Index abfragen
         await callDBResonse(pool, getOrderitemIndex(0));

@@ -5,7 +5,7 @@ This is the backend git repository of team sales.
 
 ## Demo
 
-![](https://github.com/giessler10/ESI_Sales_2021_Frontend/blob/22dd2d8ebb7b400420acf0e43fa34605d5abe7b1/ESI_Sales.gif)
+![](https://github.com/giessler10/ESI_Sales_2021_Backend/blob/22dd2d8ebb7b400420acf0e43fa34605d5abe7b1/ESI_Sales.gif)
 
 
 ## Get started

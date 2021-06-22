@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -26,27 +34,27 @@ exports.handler = async (event, context, callback) => {
 
   // get event data
   let O_NR = event.O_NR;  //Ordernummer
-  
 
-  try{
+
+  try {
     //Prüfen ob die Bestellungen existieren
     await callDBResonse(pool, checkOrderExist(O_NR));
     console.log(res);
-    if(res == null){
+    if (res == null) {
       message = 'Keine Bestellungen mit der Nummer ' + O_NR + ' gefunden.';
-      
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else if(res[0].O_OST_NR != 9){
+    else if (res[0].O_OST_NR != 9) {
       message = 'Es können nur Aufträge im Status Entwurf gelöscht werden.';
-        
+
       response = {
         statusCode: 400,
         errorMessage: message,
@@ -55,7 +63,7 @@ exports.handler = async (event, context, callback) => {
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       //Image löschen
       await callDB(pool, deleteOrderImages(O_NR));
 
@@ -64,7 +72,7 @@ exports.handler = async (event, context, callback) => {
 
       //Return Items löschen
       await callDB(pool, deleteOrderItemreturn(O_NR));
-      
+
       //Orderitems löschen
       await callDB(pool, deleteOrderItems(O_NR));
 
@@ -78,19 +86,19 @@ exports.handler = async (event, context, callback) => {
       response = {
         statusCode: 200,
         message: JSON.stringify(messageJSON)
-      }; 
+      };
       return response;
     }
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-    
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
@@ -102,8 +110,8 @@ exports.handler = async (event, context, callback) => {
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -117,11 +125,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }

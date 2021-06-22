@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -30,27 +38,27 @@ exports.handler = async (event, context, callback) => {
   let IST_NR = event.IST_NR;  //ItemState
 
 
-  try{
+  try {
     //Prüfen ob die Bestellung existiert
-    await callDBResonse(pool, checkOrderExist(O_NR,OI_NR));
-    if(res == null){
-      message = 'Die Position '+ OI_NR +' der Bestellung ' + O_NR + ' wurde nicht gefunden.';
-      
+    await callDBResonse(pool, checkOrderExist(O_NR, OI_NR));
+    if (res == null) {
+      message = 'Die Position ' + OI_NR + ' der Bestellung ' + O_NR + ' wurde nicht gefunden.';
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       //Prüfen ob der Status existiert
       await callDBResonse(pool, checkStatusExist(IST_NR));
-      if(res == null){
-        message = 'Die Status-Nummer '+ IST_NR +' wurde nicht gefunden.';
-        
+      if (res == null) {
+        message = 'Die Status-Nummer ' + IST_NR + ' wurde nicht gefunden.';
+
         response = {
           statusCode: 400,
           errorMessage: message,
@@ -59,45 +67,45 @@ exports.handler = async (event, context, callback) => {
         //Fehler schmeisen
         context.fail(JSON.stringify(response));
       }
-      else{
+      else {
         //Order aktualisieren
-        await callDB(pool, updateOrderitemStatus(O_NR,OI_NR,IST_NR));
-        
+        await callDB(pool, updateOrderitemStatus(O_NR, OI_NR, IST_NR));
+
         var messageJSON = {
-          message: 'Der Status der Position '+ OI_NR +' der Bestellung ' + O_NR + ' wurde aktualisiert.'
+          message: 'Der Status der Position ' + OI_NR + ' der Bestellung ' + O_NR + ' wurde aktualisiert.'
         };
-  
+
         response = {
           statusCode: 200,
           message: JSON.stringify(messageJSON)
-        }; 
+        };
         return response;
       }
     }
-    
+
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-    
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
   finally {
-      await pool.end();
+    await pool.end();
   }
 };
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -111,11 +119,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results[0]));
           return results;
         }
@@ -132,13 +140,13 @@ const updateOrderitemStatus = function (O_NR, OI_NR, IST_NR) {
   return (queryMessage);
 };
 
-const checkOrderExist= function (O_NR,OI_NR) {
+const checkOrderExist = function (O_NR, OI_NR) {
   var queryMessage = "SELECT * FROM ORDER.ORDERITEM WHERE OI_O_NR = " + O_NR + " AND OI_NR = " + OI_NR + ";";
   console.log(queryMessage);
   return (queryMessage);
 };
 
-const checkStatusExist= function (IST_NR) {
+const checkStatusExist = function (IST_NR) {
   var queryMessage = "SELECT * FROM ORDER.ITEMSTATE WHERE IST_NR = " + IST_NR + ";";
   console.log(queryMessage);
   return (queryMessage);

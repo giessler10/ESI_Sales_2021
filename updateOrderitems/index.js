@@ -1,8 +1,15 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
 var config = require('./config');
-
 
 //******* GLOBALS *******
 
@@ -28,25 +35,25 @@ exports.handler = async (event, context, callback) => {
   let O_NR = event.O_NR;  //Ordernummer
   let orderitems = event.body;
 
-  try{
+  try {
     //Prüfen ob die Bestellungen existieren
     await callDBResonse(pool, checkOrderExist(O_NR));
     console.log(res);
-    if(res == null){
+    if (res == null) {
       message = 'Der Auftrag mit der Nummer ' + O_NR + ' wurde nicht gefunden.';
-      
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else if(res[0].O_OST_NR != 9){
+    else if (res[0].O_OST_NR != 9) {
       message = 'Es können nur Aufträge im Status Entwurf geändert werden.';
-        
+
       response = {
         statusCode: 400,
         errorMessage: message,
@@ -55,7 +62,7 @@ exports.handler = async (event, context, callback) => {
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       //Image löschen
       await callDB(pool, deleteOrderImages(O_NR));
 
@@ -64,7 +71,7 @@ exports.handler = async (event, context, callback) => {
 
       //Return Items löschen
       await callDB(pool, deleteOrderItemreturn(O_NR));
-      
+
       //Orderitems löschen
       await callDB(pool, deleteOrderItems(O_NR));
 
@@ -73,7 +80,7 @@ exports.handler = async (event, context, callback) => {
       for (var i = 0; i < orderitems.length; i++) {
         //Prüfen, ob Orderitems in MaWi existieren ...
         await callDB(pool, insertNewOrderitem(O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
-        
+
         //Bild anlegen
         await callDB(pool, insertNewImage(O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
       }
@@ -85,19 +92,19 @@ exports.handler = async (event, context, callback) => {
       response = {
         statusCode: 200,
         message: JSON.stringify(messageJSON)
-      }; 
+      };
       return response;
     }
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-    
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
@@ -109,8 +116,8 @@ exports.handler = async (event, context, callback) => {
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -124,11 +131,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }
@@ -157,7 +164,7 @@ const deleteOrderImages = function (O_NR) {
 };
 
 const insertNewOrderitem = function (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) {
-  var queryMessage = "INSERT INTO `ORDER`.`ORDERITEM` (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) VALUES ('" + OI_O_NR + "', '" + OI_NR + "', '" + OI_IST_NR +"', '" + OI_MATERIALDESC +"', '" + OI_HEXCOLOR +"', '" + OI_QTY +"', '" + OI_PRICE +"', '" + OI_VAT +"');";
+  var queryMessage = "INSERT INTO `ORDER`.`ORDERITEM` (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) VALUES ('" + OI_O_NR + "', '" + OI_NR + "', '" + OI_IST_NR + "', '" + OI_MATERIALDESC + "', '" + OI_HEXCOLOR + "', '" + OI_QTY + "', '" + OI_PRICE + "', '" + OI_VAT + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };

@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -38,54 +46,54 @@ exports.handler = async (event, context, callback) => {
   let C_EMAIL = event.C_EMAIL;
 
 
-  try{
-        await callDBResonse(pool, checkCityExist(C_CO_ID, C_CI_PC));
-        if(res == null){
-          //Neue City anlegen
-          //console.log("Neuer Eintrag in City erstellt.")
-          await callDB(pool, insertNewCity(C_CO_ID, C_CI_PC, CI_DESC));
-        }
-        
-        //Neuen Kunden anlegen
-        await callDB(pool, insertNewCustomer(C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL));
-        
-        //Abfrage neue Kundennummer
-        await callDBResonse(pool, getNewCustomerID());
-        message = 'Die/Der Kund/inn/e ' + C_FIRSTNAME + ' ' + C_LASTNAME + ' hat die Kundennummer: '+ res.newcustomerID +'.';
+  try {
+    await callDBResonse(pool, checkCityExist(C_CO_ID, C_CI_PC));
+    if (res == null) {
+      //Neue City anlegen
+      //console.log("Neuer Eintrag in City erstellt.")
+      await callDB(pool, insertNewCity(C_CO_ID, C_CI_PC, CI_DESC));
+    }
 
-        var messageJSON = {
-        	message: message
-        };
-        
-        response = {
-        	statusCode: 200,
-        	message: JSON.stringify(messageJSON)
-        }; 
-        return response;
+    //Neuen Kunden anlegen
+    await callDB(pool, insertNewCustomer(C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME, C_CO_ID, C_CI_PC, C_STREET, C_HOUSENR, C_EMAIL, C_TEL));
 
-    }
-    catch (error) {
-      console.log(error);
-      
-      response = {
-        statusCode: 500,
-        errorMessage: "Internal Server Error",
-        errorType: "Internal Server Error"
-      };
-  	
-      //Fehler schmeisen
-      context.fail(JSON.stringify(response));
-    }
-    finally {
-        await pool.end();
-    }
+    //Abfrage neue Kundennummer
+    await callDBResonse(pool, getNewCustomerID());
+    message = 'Die/Der Kund/inn/e ' + C_FIRSTNAME + ' ' + C_LASTNAME + ' hat die Kundennummer: ' + res.newcustomerID + '.';
+
+    var messageJSON = {
+      message: message
+    };
+
+    response = {
+      statusCode: 200,
+      message: JSON.stringify(messageJSON)
+    };
+    return response;
+
+  }
+  catch (error) {
+    console.log(error);
+
+    response = {
+      statusCode: 500,
+      errorMessage: "Internal Server Error",
+      errorType: "Internal Server Error"
+    };
+
+    //Fehler schmeisen
+    context.fail(JSON.stringify(response));
+  }
+  finally {
+    await pool.end();
+  }
 };
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -99,11 +107,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results[0]));
           return results;
         }
@@ -121,19 +129,19 @@ const insertNewCustomer = function (C_CT_ID, C_COMPANY, C_FIRSTNAME, C_LASTNAME,
 };
 
 const insertNewCity = function (C_CO_ID, C_CI_PC, CI_DESC) {
-  var queryMessage = "INSERT INTO `CUSTOMER`.`CITY` (`CI_CO_ID`, `CI_PC`, `CI_DESC`) VALUES ('" + C_CO_ID + "', '" + C_CI_PC + "', '" + CI_DESC +"');";
+  var queryMessage = "INSERT INTO `CUSTOMER`.`CITY` (`CI_CO_ID`, `CI_PC`, `CI_DESC`) VALUES ('" + C_CO_ID + "', '" + C_CI_PC + "', '" + CI_DESC + "');";
   console.log(queryMessage);
   return (queryMessage);
 };
 
 const getNewCustomerID = function () {
-    var queryMessage = "SELECT max(C_NR) as newcustomerID FROM CUSTOMER.CUSTOMER;";
-    console.log(queryMessage);
-    return (queryMessage);
+  var queryMessage = "SELECT max(C_NR) as newcustomerID FROM CUSTOMER.CUSTOMER;";
+  console.log(queryMessage);
+  return (queryMessage);
 };
 
-const checkCityExist= function (C_CO_ID, C_CI_PC) {
-    var queryMessage = "SELECT * FROM CUSTOMER.CITY WHERE CI_CO_ID = '"+ C_CO_ID + "' AND CI_PC = '" + C_CI_PC + "';";
-    console.log(queryMessage);
-    return (queryMessage);
+const checkCityExist = function (C_CO_ID, C_CI_PC) {
+  var queryMessage = "SELECT * FROM CUSTOMER.CITY WHERE CI_CO_ID = '" + C_CO_ID + "' AND CI_PC = '" + C_CI_PC + "';";
+  console.log(queryMessage);
+  return (queryMessage);
 };

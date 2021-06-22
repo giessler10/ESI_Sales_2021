@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -41,84 +49,84 @@ exports.handler = async (event, context, callback) => {
   let draft = event.draft;        //Entwurf
   let orderitems = event.orderitems;
 
-  try{
+  try {
     //Prüfen ob der User existiert
     await callDBResonse(pool, checkUserExist(O_C_NR));
-    if(res == null){
-      message = 'Der Kunde mit der Kundennummer '+ O_C_NR +' wurde nicht gefunden.';
-      
+    if (res == null) {
+      message = 'Der Kunde mit der Kundennummer ' + O_C_NR + ' wurde nicht gefunden.';
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       orderitemProduce = [];
       orderitemMaWi = [];
 
       //Vorproduktion
-      if(O_C_NR == 0){
-        PO_CODE="P";  //P=Preprocessing
+      if (O_C_NR == 0) {
+        PO_CODE = "P";  //P=Preprocessing
 
         //Aktuelles Datum
         const date = new Date();
         const inc = (1000 * 60 * 60) * 2; // an hour
         const _date = new Date(date);
         O_TIMESTAMP = new Date(_date.getTime() + inc).toISOString().slice(0, 19).replace('T', ' ');
-        
+
         //Index abfragen
         await callDBResonse(pool, getOrderitemIndex(0));
         orderitemIndex = res[0].orderitemIndex;
-        
+
         body_production = buildRequestBodyNewPreOrder(0, "B2B", O_TIMESTAMP, PO_CODE, orderitems, orderitemIndex);
         await postProductionOrder(body_production);
-        
+
         //Sleep
         await sleep(100);
 
         //Orderitems anlegen
         for (var i = 0; i < orderitems.length; i++) {
-          orderitemIndex +=1;
+          orderitemIndex += 1;
 
-          await callDB(pool, insertNewOrderitem(0, orderitemIndex , 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
-          
+          await callDB(pool, insertNewOrderitem(0, orderitemIndex, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
+
           //Bild anlegen
           await callDB(pool, insertNewImage(0, orderitemIndex, 1, orderitems[i].IM_FILE));
         }
-        
+
         message = 'Die Vorproduktion wurde angelegt.';
 
         var messageJSON = {
           message: message
         };
-        
+
         response = {
           statusCode: 200,
           message: JSON.stringify(messageJSON)
-        }; 
+        };
         return response;
       }
-      else{
+      else {
         //N=NEW
-        PO_CODE="N";
+        PO_CODE = "N";
 
         //Bestellung als Enwurf anlegen
-        if(draft == true){
+        if (draft == true) {
           await callDB(pool, insertNewOrder(O_C_NR, 9));
-          
+
           //Neue Bestellnummer abfragen
           await callDBResonse(pool, getNewOrderID());
           OI_O_NR = res[0].neworderID;
-          
+
           //Orderitems anlegen
           for (var i = 0; i < orderitems.length; i++) {
-            
+
             await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
-            
+
             //Sleep
             await sleep(100);
 
@@ -127,25 +135,25 @@ exports.handler = async (event, context, callback) => {
           }
         }
         //Bestellung direkt an Produktion weiterleiten
-        else{
+        else {
           await callDB(pool, insertNewOrder(O_C_NR, 9));
-          
+
           //Neue Bestellnummer abfragen
           await callDBResonse(pool, getNewOrderID());
           OI_O_NR = res[0].neworderID;
-          
+
           //Orderitems anlegen
           for (var i = 0; i < orderitems.length; i++) {
 
             await callDB(pool, insertNewOrderitem(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].OI_MATERIALDESC, orderitems[i].OI_HEXCOLOR, orderitems[i].OI_QTY, orderitems[i].OI_PRICE, orderitems[i].OI_VAT));
-            
+
             //Sleep
             await sleep(100);
 
             //Bild anlegen
             await callDB(pool, insertNewImage(OI_O_NR, orderitems[i].OI_NR, 1, orderitems[i].IM_FILE));
           }
-          
+
           //Sleep
           await sleep(100);
 
@@ -156,39 +164,39 @@ exports.handler = async (event, context, callback) => {
             body_mawi = buildRequestBodyOrderMaWi(OI_O_NR, PO_CODE, orderitems[i]);
             await putOrderAvailability(body_mawi);
 
-            if(stored){
+            if (stored) {
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
               orderitemMaWi.push(orderitems[i]);
             }
-            else{
+            else {
               //Zu den zu produzierenden Orderitems für die Produktion hinzufügen
               orderitemProduce.push(orderitems[i]);
             }
-            
+
             //Sleep
             await sleep(300);
           }
-          
-          
+
+
           //Aufträge bei der Produktion anlegen ******************************************
-          if(orderitemProduce.length != 0){
+          if (orderitemProduce.length != 0) {
             //Neue Bestellnummer abfragen
             //Sleep
             await sleep(100);
 
             await callDBResonse(pool, detectBusiness(O_C_NR));
             C_CT_ID = res[0].C_CT_ID;
-            
+
             //Datum bestimmen
             await callDBResonse(pool, detectTimestamp(OI_O_NR));
             O_TIMESTAMP = res[0].O_TIMESTAMP;
-            
+
             body_production = buildRequestBodyNewOrder(OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_CODE, orderitemProduce);
             console.log(body_production);
             await postProductionOrder(body_production);
-            
+
           }
-          
+
           //Sleep
           await sleep(100);
 
@@ -196,57 +204,57 @@ exports.handler = async (event, context, callback) => {
 
           //Order aktualisieren
           await callDB(pool, updateOrderStatus(OI_O_NR, 1));
-          
+
           //Orderitems die verfügbar waren aktualisieren
           for (var i = 0; i < orderitemMaWi.length; i++) {
             await callDB(pool, updateOrderitemStatus(OI_O_NR, orderitemMaWi[i].OI_NR, 5));
           }
         }
-        
+
         //Sleep
         await sleep(100);
 
         //Neue Bestellnummer abfragen
         await callDBResonse(pool, getNewOrderID());
-        message = 'Der neue Auftrag hat die Nummer ' + res[0].neworderID +'.';
+        message = 'Der neue Auftrag hat die Nummer ' + res[0].neworderID + '.';
 
         var messageJSON = {
           message: message
         };
-        
+
         response = {
           statusCode: 200,
           message: JSON.stringify(messageJSON)
-        }; 
+        };
         return response;
 
       }
-      
-    }      
+
+    }
 
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-  
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
   finally {
-      await pool.end();
+    await pool.end();
   }
 };
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -260,11 +268,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }
@@ -285,11 +293,11 @@ const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
     IMAGE: orderitem.IM_FILE
   };
   body.push(currentOrder);
-  
+
   var resonse = {
     body: body
   };
-  
+
   //console.log(resonse);
   return JSON.stringify(resonse);
 };
@@ -298,11 +306,11 @@ const buildRequestBodyNewOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_COD
   var order;
   var body = [];
   var customerType;
-  
-  if(C_CT_ID == "B2C"){
+
+  if (C_CT_ID == "B2C") {
     customerType = "P";
   }
-  else{
+  else {
     customerType = "B";
   }
 
@@ -328,16 +336,16 @@ const buildRequestBodyNewPreOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_
   var body = [];
   var customerType;
   var currentOrderitemIndex = orderitemIndex;
-  
-  if(C_CT_ID == "B2C"){
+
+  if (C_CT_ID == "B2C") {
     customerType = "P";
   }
-  else{
+  else {
     customerType = "B";
   }
 
   for (var i = 0; i < orderitems.length; i++) {
-    currentOrderitemIndex +=1;
+    currentOrderitemIndex += 1;
     order = {
       O_NR: OI_O_NR,
       OI_NR: currentOrderitemIndex,
@@ -355,13 +363,13 @@ const buildRequestBodyNewPreOrder = function (OI_O_NR, C_CT_ID, O_TIMESTAMP, PO_
 };
 
 //Check if database is offline (AWS)
-const IsDataBaseOffline = function (res){
+const IsDataBaseOffline = function (res) {
 
-  if(res.data.errorMessage == null) return false; 
-  if(res.data.errorMessage === 'undefined') return false;
-  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
+  if (res.data.errorMessage == null) return false;
+  if (res.data.errorMessage === 'undefined') return false;
+  if (res.data.errorMessage.endsWith("timed out after 3.00 seconds")) {
     return true;
-  }     
+  }
   return false;
 };
 
@@ -376,10 +384,11 @@ const sleep = ms => {
 async function postProductionOrder(body) {
   let parsed;
   //console.log(body);
-  
+
   await axios.post('https://1ygz8xt0rc.execute-api.eu-central-1.amazonaws.com/main/createorder', body)
     .then((results) => {
 
+      /*
       if(IsDataBaseOffline(results)){
         response = {
           statusCode: 500,
@@ -392,6 +401,7 @@ async function postProductionOrder(body) {
         
         return; //Check if db is available
       }
+      */
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);
@@ -402,17 +412,18 @@ async function postProductionOrder(body) {
     })
     .catch((error) => {
       console.error(error);
-    }); 
+    });
 }
 
 //************ API Call MaWi ************
 
 async function putOrderAvailability(body) {
   let parsed;
-  
+
   await axios.put('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/putvorproduktion', body)
     .then((results) => {
-      
+
+      /*
       if(IsDataBaseOffline(results)){
         stored = false;
         
@@ -427,6 +438,7 @@ async function putOrderAvailability(body) {
 
         return; //Check if db is available
       }
+      */
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);
@@ -442,24 +454,24 @@ async function putOrderAvailability(body) {
 //******* SQL Statements *******
 
 const insertNewOrder = function (O_C_NR, O_OST_NR) {
-  var queryMessage = "INSERT INTO `ORDER`.`ORDER` (O_C_NR, O_OST_NR) VALUES ('" + O_C_NR + "', '" + O_OST_NR +"');";
+  var queryMessage = "INSERT INTO `ORDER`.`ORDER` (O_C_NR, O_OST_NR) VALUES ('" + O_C_NR + "', '" + O_OST_NR + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
 const insertNewOrderitem = function (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) {
-  var queryMessage = "INSERT INTO `ORDER`.`ORDERITEM` (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) VALUES ('" + OI_O_NR + "', '" + OI_NR + "', '" + OI_IST_NR +"', '" + OI_MATERIALDESC +"', '" + OI_HEXCOLOR +"', '" + OI_QTY +"', '" + OI_PRICE +"', '" + OI_VAT +"');";
+  var queryMessage = "INSERT INTO `ORDER`.`ORDERITEM` (OI_O_NR, OI_NR, OI_IST_NR, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT) VALUES ('" + OI_O_NR + "', '" + OI_NR + "', '" + OI_IST_NR + "', '" + OI_MATERIALDESC + "', '" + OI_HEXCOLOR + "', '" + OI_QTY + "', '" + OI_PRICE + "', '" + OI_VAT + "');";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
 const getNewOrderID = function () {
-    var queryMessage = "SELECT max(O_NR) as neworderID FROM ORDER.ORDER;";
-    //console.log(queryMessage);
-    return (queryMessage);
+  var queryMessage = "SELECT max(O_NR) as neworderID FROM ORDER.ORDER;";
+  //console.log(queryMessage);
+  return (queryMessage);
 };
 
-const checkUserExist= function (C_NR) {
+const checkUserExist = function (C_NR) {
   var queryMessage = "SELECT * FROM CUSTOMER.CUSTOMER WHERE C_NR='" + C_NR + "';";
   //console.log(queryMessage);
   return (queryMessage);

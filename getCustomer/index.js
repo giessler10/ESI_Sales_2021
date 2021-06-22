@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -14,57 +22,57 @@ var response;
 //******* DATABASE CONNECTION *******
 
 const con = {
-    host: config.host,
-    user: config.user,
-    password: config.password,
-    port: config.port,
+  host: config.host,
+  user: config.user,
+  password: config.password,
+  port: config.port,
 };
 
 //******* EXPORTS HANDLER  *******
 
 exports.handler = async (event, context, callback) => {
-    const pool = await mysql.createPool(con);
+  const pool = await mysql.createPool(con);
 
-    console.log(event.C_NR);
-    C_NR = event.C_NR;
-  
-    try {
-      //get Customer
-      await callDBResonse(pool, getCustomer(C_NR));
-      results = res;
-      console.log(results);
-      
-      const response = {
-        statusCode: 200,
-        body: results
-      };
-  
-      console.log(response);
-      return response;
- 
-    }
-    catch (error) {
-      console.log(error);
-      
-      response = {
-        statusCode: 500,
-        errorMessage: "Internal Server Error",
-        errorType: "Internal Server Error"
-      };
-  	
-      //Fehler schmeisen
-      context.fail(JSON.stringify(response));
-    }
-    finally {
-      await pool.end();
-    }
-  };
+  console.log(event.C_NR);
+  C_NR = event.C_NR;
+
+  try {
+    //get Customer
+    await callDBResonse(pool, getCustomer(C_NR));
+    results = res;
+    console.log(results);
+
+    const response = {
+      statusCode: 200,
+      body: results
+    };
+
+    console.log(response);
+    return response;
+
+  }
+  catch (error) {
+    console.log(error);
+
+    response = {
+      statusCode: 500,
+      errorMessage: "Internal Server Error",
+      errorType: "Internal Server Error"
+    };
+
+    //Fehler schmeisen
+    context.fail(JSON.stringify(response));
+  }
+  finally {
+    await pool.end();
+  }
+};
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -78,11 +86,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = [];
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }
@@ -93,7 +101,7 @@ async function callDBResonse(client, queryMessage) {
 //******* SQL Statements *******
 
 const getCustomer = function (C_NR) {
-    var queryMessage = "SELECT * FROM VIEWS.CUSTOMERINFO WHERE C_NR='" + C_NR + "' ORDER BY C_COMPANY, C_LASTNAME, C_FIRSTNAME ASC;";
-    //console.log(queryMessage)
-    return (queryMessage);
+  var queryMessage = "SELECT * FROM VIEWS.CUSTOMERINFO WHERE C_NR='" + C_NR + "' ORDER BY C_COMPANY, C_LASTNAME, C_FIRSTNAME ASC;";
+  //console.log(queryMessage)
+  return (queryMessage);
 };

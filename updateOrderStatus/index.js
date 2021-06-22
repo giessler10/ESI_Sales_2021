@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -37,27 +45,27 @@ exports.handler = async (event, context, callback) => {
   let OST_NR = event.OST_NR;      //OrderState
 
 
-  try{
+  try {
     //Prüfen ob die Bestellung existiert
     await callDBResonse(pool, checkOrderExist(O_NR));
-    if(res == null){
+    if (res == null) {
       message = 'Die Bestellung ' + O_NR + ' wurde nicht gefunden.';
-      
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       //Prüfen ob der Status existiert
       await callDBResonse(pool, checkStatusExist(OST_NR));
-      if(res == null){
-        message = 'Die Status-Nummer '+ OST_NR +' wurde nicht gefunden.';
-        
+      if (res == null) {
+        message = 'Die Status-Nummer ' + OST_NR + ' wurde nicht gefunden.';
+
         response = {
           statusCode: 400,
           errorMessage: message,
@@ -66,14 +74,14 @@ exports.handler = async (event, context, callback) => {
         //Fehler schmeisen
         context.fail(JSON.stringify(response));
       }
-      else{
+      else {
 
         orderitemProduce = [];
         orderitemMaWi = [];
-        
-        if(OST_NR == 1){
+
+        if (OST_NR == 1) {
           //Aufträge bei der Produktion anlegen ******************************************
-        
+
           //Order abrufen
           await callDBResonse(pool, getOrder(O_NR));
           var O_TIMESTAMP = res[0].O_TIMESTAMP;
@@ -82,7 +90,7 @@ exports.handler = async (event, context, callback) => {
 
           //Sleep
           await sleep(100);
-          
+
           //Orderitems abrufen
           await callDBResonse(pool, getOrderOrderitems(O_NR));
           var orderitems = res;
@@ -95,26 +103,26 @@ exports.handler = async (event, context, callback) => {
 
             body_mawi = buildRequestBodyOrderMaWi(O_NR, "N", orderitems[i]);
             await putOrderAvailability(body_mawi);
-            
+
             //Sleep
             await sleep(300);
 
-            if(stored){
+            if (stored) {
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
-              orderitemMaWi.push(orderitems[i]);      
+              orderitemMaWi.push(orderitems[i]);
             }
-            else{
+            else {
               //Zu den zu produzierenden Orderitems für die Produktion hinzufügen
               orderitemProduce.push(orderitems[i]);
             }
           }
 
-          if(orderitemProduce.length != 0){
+          if (orderitemProduce.length != 0) {
             //Sleep
             await sleep(100);
 
             body_production = buildRequestBodyNewOrder(O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, orderitemProduce);
-            
+
             await postProductionOrder(body_production);
             //console.log(body_production);
           }
@@ -123,63 +131,63 @@ exports.handler = async (event, context, callback) => {
           await sleep(100);
 
           //Order aktualisieren
-          await callDB(pool, updateOrderStatus(O_NR,OST_NR));
+          await callDB(pool, updateOrderStatus(O_NR, OST_NR));
 
           //Orderitems die verfügbar waren aktualisieren
           for (var i = 0; i < orderitemMaWi.length; i++) {
             await callDB(pool, updateOrderitemStatus(O_NR, orderitemMaWi[i].OI_NR, 5));
           }
-          
-          messageJSON = {
-            message: 'Der Auftrag '+ O_NR +' wurde beauftragt.'
-          };
-    
-          response = {
-            statusCode: 200,
-            message: JSON.stringify(messageJSON)
-          }; 
-        }
-        else{
-          //Order aktualisieren
-          await callDB(pool, updateOrderStatus(O_NR,OST_NR));
 
           messageJSON = {
-            message: 'Der Status des Auftrags '+ O_NR +' wurde aktualisiert.'
+            message: 'Der Auftrag ' + O_NR + ' wurde beauftragt.'
           };
-    
+
           response = {
             statusCode: 200,
             message: JSON.stringify(messageJSON)
-          }; 
+          };
         }
-        
+        else {
+          //Order aktualisieren
+          await callDB(pool, updateOrderStatus(O_NR, OST_NR));
+
+          messageJSON = {
+            message: 'Der Status des Auftrags ' + O_NR + ' wurde aktualisiert.'
+          };
+
+          response = {
+            statusCode: 200,
+            message: JSON.stringify(messageJSON)
+          };
+        }
+
         return response;
       }
     }
-    
+
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-    
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
   finally {
-      await pool.end();
+    await pool.end();
   }
 };
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -193,11 +201,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }
@@ -218,11 +226,11 @@ const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
     IMAGE: orderitem.IM_FILE
   };
   body.push(currentOrder);
-  
+
   var resonse = {
     body: body
   };
-  
+
   console.log(resonse);
   return JSON.stringify(resonse);
 };
@@ -234,17 +242,17 @@ const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, 
   var PO_CODE;
 
   //PO_CODE festlegen
-  if(O_OT_NR == 1){
-    PO_CODE="P";  //P=Preprocessing
+  if (O_OT_NR == 1) {
+    PO_CODE = "P";  //P=Preprocessing
   }
-  else{
-    PO_CODE="N";  //N=NEW
+  else {
+    PO_CODE = "N";  //N=NEW
   }
-  
-  if(C_CT_ID == "B2C"){
+
+  if (C_CT_ID == "B2C") {
     customerType = "P";
   }
-  else{
+  else {
     customerType = "B";
   }
 
@@ -266,13 +274,13 @@ const buildRequestBodyNewOrder = function (O_NR, C_CT_ID, O_TIMESTAMP, O_OT_NR, 
 };
 
 //Check if database is offline (AWS)
-const IsDataBaseOffline = function (res){
+const IsDataBaseOffline = function (res) {
 
-  if(res.data.errorMessage == null) return false; 
-  if(res.data.errorMessage === 'undefined') return false;
-  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
-      return true;
-  }     
+  if (res.data.errorMessage == null) return false;
+  if (res.data.errorMessage === 'undefined') return false;
+  if (res.data.errorMessage.endsWith("timed out after 3.00 seconds")) {
+    return true;
+  }
   return false;
 };
 
@@ -288,10 +296,11 @@ const sleep = ms => {
 async function postProductionOrder(body) {
   let parsed;
   //console.log(body);
-  
+
   await axios.post('https://1ygz8xt0rc.execute-api.eu-central-1.amazonaws.com/main/createorder', body)
     .then((results) => {
-      
+
+      /*
       if(IsDataBaseOffline(results)){  
         response = {
           statusCode: 500,
@@ -304,6 +313,7 @@ async function postProductionOrder(body) {
 
         return; //Check if db is available
       }
+      */
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);
@@ -313,17 +323,18 @@ async function postProductionOrder(body) {
     })
     .catch((error) => {
       console.error(error);
-    });  
+    });
 }
 
 //************ API Call MaWi ************
 
 async function putOrderAvailability(body) {
   let parsed;
-  
+
   await axios.put('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/putvorproduktion', body)
     .then((results) => {
-      
+
+      /*
       if(IsDataBaseOffline(results)){
         stored = false;
         
@@ -338,6 +349,7 @@ async function putOrderAvailability(body) {
 
         return; //Check if db is available
       }
+      */
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);
@@ -358,25 +370,25 @@ const updateOrderStatus = function (O_NR, O_OST_NR) {
   return (queryMessage);
 };
 
-const checkOrderExist= function (O_NR) {
+const checkOrderExist = function (O_NR) {
   var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const checkStatusExist= function (OST_NR) {
+const checkStatusExist = function (OST_NR) {
   var queryMessage = "SELECT * FROM ORDER.ORDERSTATE WHERE OST_NR = " + OST_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const getOrder= function (O_NR) {
+const getOrder = function (O_NR) {
   var queryMessage = "SELECT * FROM VIEWS.ORDERINFO WHERE O_NR=" + O_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const getOrderOrderitems= function (O_NR) {
+const getOrderOrderitems = function (O_NR) {
   var queryMessage = "SELECT OI_O_NR, OI_NR, OI_IST_NR, IST_DESC, OI_MATERIALDESC, OI_HEXCOLOR, OI_QTY, OI_PRICE, OI_VAT, IM_FILE  FROM VIEWS.FULLORDER WHERE OI_O_NR = " + O_NR + " ORDER BY OI_O_NR, OI_NR;";
   //console.log(queryMessage);
   return (queryMessage);

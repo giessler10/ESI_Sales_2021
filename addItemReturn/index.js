@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -44,7 +52,7 @@ exports.handler = async (event, context, callback) => {
   //Fehler schmeißen wenn Body kein Array ist.
   if (!Array.isArray(itemReturnItems)) {
     message = 'Fehlerhafte Daten im Body';
-        
+
     response = {
       statusCode: 400,
       errorMessage: message,
@@ -54,25 +62,25 @@ exports.handler = async (event, context, callback) => {
     context.fail(JSON.stringify(response));
   }
 
-  try{
+  try {
     //Prüfen ob der Auftrag existiert
     await callDBResonse(pool, checkOrderExist(O_NR));
-    if(res == null){
+    if (res == null) {
       message = 'Der Auftrag' + O_NR + ' wurde nicht gefunden.';
-      
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       //Status der Order ändern
       //await callDB(pool, updateOrderStatus(O_NR, 5));   //Änderung durch DB
-      
+
       body_production = [];
       orderitemMaWi = [];
 
@@ -80,7 +88,7 @@ exports.handler = async (event, context, callback) => {
       for (var i = 0; i < itemReturnItems.length; i++) {
         //Status prüfen
         await callDBResonse(pool, getMaxPO_COUNTER_AND_STATE(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR));
-        if(res == null){
+        if (res == null) {
           new_IR_Counter = 1;
 
           //Item Return anlegen
@@ -90,25 +98,25 @@ exports.handler = async (event, context, callback) => {
           await sleep(100);
 
           //Status Orderitem ändern
-          if(itemReturnItems[i].IR_RT_NR == 1){
-            if(itemReturnItems[i].IR_REPRODUCE == 1){
+          if (itemReturnItems[i].IR_RT_NR == 1) {
+            if (itemReturnItems[i].IR_REPRODUCE == 1) {
               await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
             }
-            else{
+            else {
               await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 10));
             }
           }
-          else{
-            if(itemReturnItems[i].IR_REPRODUCE == 1){
+          else {
+            if (itemReturnItems[i].IR_REPRODUCE == 1) {
               await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
             }
-            else{
+            else {
               await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 10));
             }
           }
 
           //Wenn Neuproduktion gewünscht ist ...
-          if(itemReturnItems[i].IR_REPRODUCE == "1"){
+          if (itemReturnItems[i].IR_REPRODUCE == "1") {
             console.log("Neuproduktion gewünscht");
             sendNewProduction = true;
 
@@ -119,7 +127,7 @@ exports.handler = async (event, context, callback) => {
 
             //Sleep
             await sleep(100);
-            
+
             stored = false;
 
             //Prüfen, ob Orderitem in MaWi existiert
@@ -128,11 +136,11 @@ exports.handler = async (event, context, callback) => {
 
             //Sleep
             await sleep(300);
-            
+
             console.log("Stored:");
             console.log(stored);
 
-            if(stored){
+            if (stored) {
               //console.log("Insert Mawi");
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
               var currentItemReturn = itemReturnItems[i];
@@ -142,14 +150,14 @@ exports.handler = async (event, context, callback) => {
               //await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
             }
             //Neue Produktion auslösen
-            else{
+            else {
               //console.log("Insert Production");
               order = buildNewOrderObject("R", new_IR_Counter, orderitem);
               body_production.push(order);
             }
           }
         }
-        else if(res[0].IR_IST_NR == 8 || res[0].IR_IST_NR == 10){
+        else if (res[0].IR_IST_NR == 8 || res[0].IR_IST_NR == 10) {
           new_IR_Counter = res[0].IR_COUNTER + 1;
 
           //Item Return anlegen
@@ -159,22 +167,22 @@ exports.handler = async (event, context, callback) => {
           await sleep(100);
 
           //Status Orderitem ändern
-          if(itemReturnItems[i].IR_RT_NR == 1){
+          if (itemReturnItems[i].IR_RT_NR == 1) {
             await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 11));
           }
-          else{
+          else {
             await callDB(pool, updateOrderitemStatus(itemReturnItems[i].IR_O_NR, itemReturnItems[i].IR_OI_NR, 9));
           }
 
           //Wenn Neuproduktion gewünscht ist ...
-          if(itemReturnItems[i].IR_REPRODUCE == 1){
+          if (itemReturnItems[i].IR_REPRODUCE == 1) {
             console.log("Neue Produktion");
             sendNewProduction = true;
 
             await callDBResonse(pool, getOrderOrderitem(O_NR, itemReturnItems[i].IR_OI_NR));
             orderitem = res[0];
             orderitem.OI_QTY = itemReturnItems[i].IR_QTY;
-            
+
             stored = false;
 
             //Prüfen, ob Orderitem in MaWi existiert
@@ -183,11 +191,11 @@ exports.handler = async (event, context, callback) => {
 
             //Sleep
             await sleep(300);
-            
+
             console.log("Stored:");
             console.log(stored);
 
-            if(stored){
+            if (stored) {
               //Wenn verfügbar, dem Array orderitemMaWi hinzufügen
               var currentItemReturn = itemReturnItems[i];
               currentItemReturn.IR_COUNTER = new_IR_Counter;
@@ -196,7 +204,7 @@ exports.handler = async (event, context, callback) => {
               //await callDBResonse(pool, updateItemReturnStatus(O_NR, itemReturnItems[i].IR_OI_NR, itemReturnItems[i].IR_COUNTER, 5));
             }
             //Neue Produktion auslösen
-            else{
+            else {
               order = buildNewOrderObject("R", new_IR_Counter, orderitem);
               body_production.push(order);
             }
@@ -204,10 +212,10 @@ exports.handler = async (event, context, callback) => {
         }
       }
 
-      if(sendNewProduction){
-        
+      if (sendNewProduction) {
+
         body_production_Parsed = JSON.stringify(body_production);
-            
+
         await postProductionOrder(body_production_Parsed);
         //console.log(body_production_Parsed);
 
@@ -227,33 +235,33 @@ exports.handler = async (event, context, callback) => {
       response = {
         statusCode: 200,
         message: JSON.stringify(messageJSON)
-      }; 
+      };
       return response;
     }
-    
+
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-    
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
   finally {
-      await pool.end();
+    await pool.end();
   }
 };
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -267,11 +275,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }
@@ -292,11 +300,11 @@ const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
     IMAGE: orderitem.IM_FILE
   };
   body.push(currentOrder);
-  
+
   var resonse = {
     body: body
   };
-  
+
   console.log(resonse);
   return JSON.stringify(resonse);
 };
@@ -305,37 +313,37 @@ const buildRequestBodyOrderMaWi = function (OI_O_NR, PO_CODE, orderitem) {
 const buildNewOrderObject = function (PO_CODE, PO_COUNTER, orderitem) {
   var customerType;
 
-  if(orderitem.C_CT_ID == "B2C"){
+  if (orderitem.C_CT_ID == "B2C") {
     customerType = "P";
   }
-  else{
+  else {
     customerType = "B";
   }
-  
+
   var order = {
-      O_NR: orderitem.O_NR,
-      OI_NR: orderitem.OI_NR,
-      PO_CODE: PO_CODE,
-      PO_COUNTER: PO_COUNTER,
-      QUANTITY: orderitem.OI_QTY,
-      CUSTOMER_TYPE: customerType,
-      O_DATE: orderitem.O_TIMESTAMP,
-      IMAGE: orderitem.IM_FILE,
-      HEXCOLOR: orderitem.OI_HEXCOLOR
+    O_NR: orderitem.O_NR,
+    OI_NR: orderitem.OI_NR,
+    PO_CODE: PO_CODE,
+    PO_COUNTER: PO_COUNTER,
+    QUANTITY: orderitem.OI_QTY,
+    CUSTOMER_TYPE: customerType,
+    O_DATE: orderitem.O_TIMESTAMP,
+    IMAGE: orderitem.IM_FILE,
+    HEXCOLOR: orderitem.OI_HEXCOLOR
   };
-  
+
   return order;
 };
 
 //Check if database is offline (AWS)
-const IsDataBaseOffline = function (res){
+const IsDataBaseOffline = function (res) {
 
-  if(res.data.errorMessage == null) return false; 
-  if(res.data.errorMessage === 'undefined') return false;
-  if(res.data.errorMessage.endsWith("timed out after 3.00 seconds")){
-      alert("Database is offline (AWS).");
-      return true;
-  }     
+  if (res.data.errorMessage == null) return false;
+  if (res.data.errorMessage === 'undefined') return false;
+  if (res.data.errorMessage.endsWith("timed out after 3.00 seconds")) {
+    alert("Database is offline (AWS).");
+    return true;
+  }
   return false;
 };
 
@@ -350,10 +358,11 @@ const sleep = ms => {
 async function postProductionOrder(body) {
   let parsed;
   //console.log(body);
-  
+
   await axios.post('https://1ygz8xt0rc.execute-api.eu-central-1.amazonaws.com/main/createorder', body)
     .then((results) => {
-      
+
+      /*
       if(IsDataBaseOffline(results)){
         response = {
           statusCode: 500,
@@ -366,6 +375,7 @@ async function postProductionOrder(body) {
         
         return; //Check if db is available
       }
+      */
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);
@@ -382,10 +392,11 @@ async function postProductionOrder(body) {
 
 async function putOrderAvailability(body) {
   let parsed;
-  
+
   await axios.put('https://9j8oo3h3yk.execute-api.eu-central-1.amazonaws.com/Main/putvorproduktion', body)
     .then((results) => {
-      
+
+      /*
       if(IsDataBaseOffline(results)){
         stored=false;
 
@@ -400,6 +411,7 @@ async function putOrderAvailability(body) {
         
         return; //Check if db is available
       }
+      */
 
       parsed = JSON.stringify(results.data);
       //console.log(parsed);
@@ -438,20 +450,20 @@ const insertNewItemReturn = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_RT_NR, I
   return (queryMessage);
 };
 
-const getOrderOrderitem= function (O_NR, OI_NR) {
-  var queryMessage = "SELECT O_NR, OI_NR, OI_QTY, C_CT_ID, O_TIMESTAMP, IM_FILE, OI_HEXCOLOR FROM VIEWS.FULLORDER WHERE O_NR = "+ O_NR + " AND OI_NR=" + OI_NR + ";";
+const getOrderOrderitem = function (O_NR, OI_NR) {
+  var queryMessage = "SELECT O_NR, OI_NR, OI_QTY, C_CT_ID, O_TIMESTAMP, IM_FILE, OI_HEXCOLOR FROM VIEWS.FULLORDER WHERE O_NR = " + O_NR + " AND OI_NR=" + OI_NR + ";";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
-const getMaxPO_COUNTER_AND_STATE= function (IR_O_NR, IR_OI_NR) {
+const getMaxPO_COUNTER_AND_STATE = function (IR_O_NR, IR_OI_NR) {
   var queryMessage = "SELECT IR_COUNTER, IR_IST_NR FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + " AND IR_COUNTER=(Select max(IR_COUNTER) FROM QUALITY.ITEMRETURN WHERE IR_O_NR=" + IR_O_NR + " AND IR_OI_NR=" + IR_OI_NR + ");";
   //console.log(queryMessage);
   return (queryMessage);
 };
 
 const updateItemReturnStatus = function (IR_O_NR, IR_OI_NR, IR_COUNTER, IR_IST_NR) {
-  var queryMessage = "UPDATE `QUALITY`.`ITEMRETURN` SET `IR_IST_NR` = '" + IR_IST_NR + "' WHERE (`IR_O_NR` = '"+ IR_O_NR + "') and (`IR_OI_NR` = '" + IR_OI_NR + "') and (`IR_COUNTER` = '" + IR_COUNTER + "');";
+  var queryMessage = "UPDATE `QUALITY`.`ITEMRETURN` SET `IR_IST_NR` = '" + IR_IST_NR + "' WHERE (`IR_O_NR` = '" + IR_O_NR + "') and (`IR_OI_NR` = '" + IR_OI_NR + "') and (`IR_COUNTER` = '" + IR_COUNTER + "');";
   console.log(queryMessage);
   return (queryMessage);
 };

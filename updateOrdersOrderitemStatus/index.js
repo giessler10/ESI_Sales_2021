@@ -1,3 +1,11 @@
+/*-----------------------------------------------------------------------*/
+// Autor: ESI SoSe21 - Team sale & shipping
+// University: University of Applied Science Offenburg
+// Members: Tobias Gießler, Christoph Werner, Katarina Helbig, Aline Schaub
+// Contact: ehelbig@stud.hs-offenburg.de, saline@stud.hs-offenburg.de,
+//          cwerner@stud.hs-offenburg.de, tgiessle@stud.hs-offenburg.de
+/*-----------------------------------------------------------------------*/
+
 //******* IMPORTS *******
 
 const mysql = require('mysql2/promise');
@@ -27,11 +35,11 @@ exports.handler = async (event, context, callback) => {
   // get event data
   let IST_NR = event.IST_NR;  //ItemState
   let orders = event.body;
-  
+
   //Fehler schmeißen wenn Body kein Array ist.
   if (!Array.isArray(orders)) {
     message = 'Fehlerhafte Daten im Body';
-        
+
     response = {
       statusCode: 400,
       errorMessage: message,
@@ -42,40 +50,40 @@ exports.handler = async (event, context, callback) => {
   }
 
 
-  try{
+  try {
     //Prüfen ob die Bestellungen existieren
     await callDBResonse(pool, checkOrdersExist(orders));
     console.log(res);
-    if(res == null){
+    if (res == null) {
       message = 'Keine Bestellungen gefunden.';
-      
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else if(orders.length != res.length){
+    else if (orders.length != res.length) {
       message = 'Einige Bestellungen wurde nicht gefunden.';
-      
+
       response = {
         statusCode: 404,
         errorMessage: message,
         errorType: "Not Found"
       };
-      
+
       //Fehler schmeisen
       context.fail(JSON.stringify(response));
     }
-    else{
+    else {
       //Prüfen ob der Status existiert
       await callDBResonse(pool, checkStatusExist(IST_NR));
-      if(res == null){
-        message = 'Die Status-Nummer '+ IST_NR +' wurde nicht gefunden.';
-        
+      if (res == null) {
+        message = 'Die Status-Nummer ' + IST_NR + ' wurde nicht gefunden.';
+
         response = {
           statusCode: 400,
           errorMessage: message,
@@ -84,58 +92,58 @@ exports.handler = async (event, context, callback) => {
         //Fehler schmeisen
         context.fail(JSON.stringify(response));
       }
-      else{
+      else {
         //Orderitems aktualisieren
-        
+
         var sql = buildSQLString(orders, IST_NR);
-        
-        
-        if(sql[0] != undefined){
+
+
+        if (sql[0] != undefined) {
           await callDB(pool, sql[0]); //New oder Preproduction
         }
-        if(sql[1] != undefined){
+        if (sql[1] != undefined) {
           await callDB(pool, sql[1]); //Quality
         }
-        
-        if(sql[2] != undefined){
+
+        if (sql[2] != undefined) {
           await callDB(pool, sql[2]); //Item Return
         }
 
         var messageJSON = {
           message: 'Der Status der Positionen der Bestellung wurde aktualisiert.'
         };
-  
+
         response = {
           statusCode: 200,
           message: JSON.stringify(messageJSON)
-        }; 
+        };
         return response;
       }
     }
-    
+
   }
   catch (error) {
     console.log(error);
-    
+
     response = {
       statusCode: 500,
       errorMessage: "Internal Server Error",
       errorType: "Internal Server Error"
     };
-    
+
     //Fehler schmeisen
     context.fail(JSON.stringify(response));
   }
   finally {
-      await pool.end();
+    await pool.end();
   }
 };
 
 //******* DB Call Functions *******
 
 async function callDB(client, queryMessage) {
-    await client.query(queryMessage)
-      .catch(console.log);
+  await client.query(queryMessage)
+    .catch(console.log);
 }
 
 async function callDBResonse(client, queryMessage) {
@@ -149,11 +157,11 @@ async function callDBResonse(client, queryMessage) {
     .then(
       (results) => {
         //Prüfen, ob queryResult == []
-        if(!results.length){
+        if (!results.length) {
           //Kein Eintrag in der DB gefunden
           res = null;
         }
-        else{
+        else {
           res = JSON.parse(JSON.stringify(results));
           return results;
         }
@@ -165,11 +173,11 @@ async function callDBResonse(client, queryMessage) {
 
 const buildSQLWhereString = function (orders) {
   var where = "WHERE (OI_O_NR = " + orders[0]["O_NR"] + " and OI_NR = " + orders[0]["OI_NR"] + ")";
-  
+
   if (orders.length > 1) {
     for (var i = 1; i < orders.length; i++) {
       where += " OR (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
-    } 
+    }
   }
 
   return where;
@@ -179,60 +187,60 @@ function buildSQLString(orders, IST_NR) {
   var whereNew;
   var whereQS;
   var whereReturn;
-  
+
   var queryMessageNew;
   var queryMessageQS;
   var queryMessageReturn;
 
   for (var i = 0; i < orders.length; i++) {
     //New (N) Orderitems or Preproduction (P)
-    if (orders[i]["PO_CODE"] == "P" || orders[i]["PO_CODE"] == "N"){
+    if (orders[i]["PO_CODE"] == "P" || orders[i]["PO_CODE"] == "N") {
       if (whereNew == undefined) {
         whereNew = "where (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
-      } 
-      else{
-       whereNew += " or (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
+      }
+      else {
+        whereNew += " or (OI_O_NR = " + orders[i]["O_NR"] + " and OI_NR = " + orders[i]["OI_NR"] + ")";
       }
     }
-    
+
     //Orderitems with Quality issues (Q)
-    if (orders[i]["PO_CODE"] == "Q"){
-      if (whereQS == undefined){
+    if (orders[i]["PO_CODE"] == "Q") {
+      if (whereQS == undefined) {
         whereQS = "where (QI_O_NR = " + orders[i]["O_NR"] + " and QI_OI_NR = " + orders[i]["OI_NR"] + " and QI_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
-      } 
-      else{
-       whereQS += " or (QI_O_NR = " + orders[i]["O_NR"] + " and QI_OI_NR = " + orders[i]["OI_NR"] + " and QI_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
       }
-    } 
-    
+      else {
+        whereQS += " or (QI_O_NR = " + orders[i]["O_NR"] + " and QI_OI_NR = " + orders[i]["OI_NR"] + " and QI_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
+      }
+    }
+
     //Orderitems that needs reproduction due to Return (R)
-    if (orders[i]["PO_CODE"] == "R"){
-      if (whereReturn == undefined){
+    if (orders[i]["PO_CODE"] == "R") {
+      if (whereReturn == undefined) {
         whereReturn = "where (IR_O_NR = " + orders[i]["O_NR"] + " and IR_OI_NR = " + orders[i]["OI_NR"] + " and IR_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
-      } 
-      else{
+      }
+      else {
         whereReturn += " or (IR_O_NR = " + orders[i]["O_NR"] + " and IR_OI_NR = " + orders[i]["OI_NR"] + " and IR_COUNTER = " + orders[i]["PO_COUNTER"] + ")";
       }
-    } 
+    }
   }
- 
+
   if (whereNew != undefined) {
     queryMessageNew = "UPDATE ORDER.ORDERITEM SET OI_IST_NR = " + IST_NR + " " + whereNew + "";
   }
- 
+
   if (whereQS != undefined) {
     queryMessageQS = "UPDATE QUALITY.QUALITYISSUE SET QI_IST_NR = " + IST_NR + " " + whereQS + "";
   }
-  
+
   if (whereReturn != undefined) {
-    queryMessageReturn = "UPDATE QUALITY.ITEMRETURN SET IR_IST_NR = " + " " +IST_NR + " " + whereReturn + "";
+    queryMessageReturn = "UPDATE QUALITY.ITEMRETURN SET IR_IST_NR = " + " " + IST_NR + " " + whereReturn + "";
   }
-  
+
   console.log("R " + queryMessageReturn);
   console.log("QS " + queryMessageQS);
   console.log("N " + queryMessageNew);
-  
-  return [queryMessageNew,queryMessageQS,queryMessageReturn];
+
+  return [queryMessageNew, queryMessageQS, queryMessageReturn];
 }
 
 
